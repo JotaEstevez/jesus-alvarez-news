@@ -9,6 +9,7 @@ import { InboxPage } from "./pages/InboxPage";
 import { NewsDetailPage } from "./pages/NewsDetailPage";
 import { GeneratorPage } from "./pages/GeneratorPage";
 import { ApprovalPage } from "./pages/ApprovalPage";
+import { PublishPage } from "./pages/PublishPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/generator" element={<GeneratorPage />} />
             <Route path="/generator/:newsId" element={<GeneratorPage />} />
             <Route path="/approval" element={<ApprovalPage />} />
+            <Route path="/publish" element={<PublishPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />

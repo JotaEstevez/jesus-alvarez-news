@@ -18,6 +18,7 @@ const navigation = [
   { name: 'Inbox', href: '/inbox', icon: Inbox },
   { name: 'Generador', href: '/generator', icon: PenTool },
   { name: 'Aprobación', href: '/approval', icon: CheckSquare },
+  { name: 'Para Publicar', href: '/publish', icon: FileText },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
   { name: 'Reportes', href: '/reports', icon: BarChart3 },
   { name: 'Configuración', href: '/settings', icon: Settings },

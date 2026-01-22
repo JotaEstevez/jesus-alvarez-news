@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNewsroom } from '@/context/NewsroomContext';
 import { ScheduleDialog } from '@/components/approval/ScheduleDialog';
+import { PostDetailDialog } from '@/components/approval/PostDetailDialog';
 import { useToast } from '@/hooks/use-toast';
 import { PostStatus } from '@/types/newsroom';
 import { 
@@ -43,6 +44,8 @@ export function ApprovalPage() {
   const [activeTab, setActiveTab] = useState<PostStatus | 'all'>('all');
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailDraftId, setDetailDraftId] = useState<string | null>(null);
 
   const filteredDrafts = activeTab === 'all' 
     ? drafts 
@@ -101,6 +104,13 @@ export function ApprovalPage() {
     }
   };
 
+  const handleOpenDetail = (draftId: string) => {
+    setDetailDraftId(draftId);
+    setDetailDialogOpen(true);
+  };
+
+  const selectedDetailDraft = detailDraftId ? drafts.find(d => d.id === detailDraftId) : null;
+
   return (
     <MainLayout>
       <PageHeader 
@@ -130,8 +140,9 @@ export function ApprovalPage() {
               {filteredDrafts.map((draft, index) => (
                 <Card 
                   key={draft.id} 
-                  className="shadow-card hover:shadow-soft transition-all duration-200 animate-fade-in"
+                  className="shadow-card hover:shadow-soft transition-all duration-200 animate-fade-in cursor-pointer"
                   style={{ animationDelay: `${index * 50}ms` }}
+                  onClick={() => handleOpenDetail(draft.id)}
                 >
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
@@ -159,8 +170,8 @@ export function ApprovalPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2">
+                            <DropdownMenuContent align="end" className="bg-background" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem className="gap-2" onClick={() => handleOpenDetail(draft.id)}>
                                 <Eye className="h-4 w-4" />
                                 Ver detalle
                               </DropdownMenuItem>
@@ -304,6 +315,18 @@ export function ApprovalPage() {
         onOpenChange={setScheduleDialogOpen}
         onSchedule={handleSchedule}
         currentSchedule={selectedDraftId ? drafts.find(d => d.id === selectedDraftId)?.scheduledAt : undefined}
+      />
+
+      {/* Post Detail Dialog */}
+      <PostDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        draft={selectedDetailDraft || null}
+        newsTitle={selectedDetailDraft ? getNewsTitle(selectedDetailDraft.newsItemId) : undefined}
+        onReview={handleReview}
+        onApprove={handleApprove}
+        onPublish={handlePublish}
+        onSchedule={handleOpenSchedule}
       />
     </MainLayout>
   );
