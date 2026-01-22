@@ -7,14 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { mockDrafts, mockNewsItems } from '@/data/mockData';
-import { PostStatus } from '@/types/newsroom';
+import { PostDraft, PostStatus } from '@/types/newsroom';
+import { ScheduleDialog } from '@/components/approval/ScheduleDialog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   CheckCircle2, 
   XCircle, 
   Eye, 
   Calendar,
   Clock,
-  MoreHorizontal
+  MoreHorizontal,
+  Send
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -34,11 +37,15 @@ const statusTabs: { value: PostStatus | 'all'; label: string }[] = [
 ];
 
 export function ApprovalPage() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<PostStatus | 'all'>('all');
+  const [drafts, setDrafts] = useState<PostDraft[]>(mockDrafts);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<PostDraft | null>(null);
 
   const filteredDrafts = activeTab === 'all' 
-    ? mockDrafts 
-    : mockDrafts.filter(draft => draft.status === activeTab);
+    ? drafts 
+    : drafts.filter(draft => draft.status === activeTab);
 
   const getNewsTitle = (newsItemId: string) => {
     const news = mockNewsItems.find(n => n.id === newsItemId);
@@ -47,15 +54,61 @@ export function ApprovalPage() {
 
   const getStatusCounts = () => {
     return {
-      all: mockDrafts.length,
-      pending: mockDrafts.filter(d => d.status === 'pending').length,
-      reviewed: mockDrafts.filter(d => d.status === 'reviewed').length,
-      approved: mockDrafts.filter(d => d.status === 'approved').length,
-      published: mockDrafts.filter(d => d.status === 'published').length,
+      all: drafts.length,
+      pending: drafts.filter(d => d.status === 'pending').length,
+      reviewed: drafts.filter(d => d.status === 'reviewed').length,
+      approved: drafts.filter(d => d.status === 'approved').length,
+      published: drafts.filter(d => d.status === 'published').length,
     };
   };
 
   const counts = getStatusCounts();
+
+  const updateDraftStatus = (draftId: string, newStatus: PostStatus, message: string) => {
+    setDrafts(prev => prev.map(d => 
+      d.id === draftId 
+        ? { ...d, status: newStatus, updatedAt: new Date() } 
+        : d
+    ));
+    toast({ title: message });
+  };
+
+  const handleApprove = (draft: PostDraft) => {
+    updateDraftStatus(draft.id, 'approved', `Post aprobado correctamente`);
+  };
+
+  const handleReview = (draft: PostDraft) => {
+    updateDraftStatus(draft.id, 'reviewed', `Post marcado como revisado`);
+  };
+
+  const handlePublish = (draft: PostDraft) => {
+    updateDraftStatus(draft.id, 'published', `Post marcado como publicado`);
+  };
+
+  const handleReject = (draft: PostDraft) => {
+    setDrafts(prev => prev.filter(d => d.id !== draft.id));
+    toast({ title: 'Post rechazado', description: 'El post ha sido eliminado de la lista.' });
+  };
+
+  const handleOpenSchedule = (draft: PostDraft) => {
+    setSelectedDraft(draft);
+    setScheduleDialogOpen(true);
+  };
+
+  const handleSchedule = (scheduledAt: Date) => {
+    if (selectedDraft) {
+      setDrafts(prev => prev.map(d => 
+        d.id === selectedDraft.id 
+          ? { ...d, scheduledAt, updatedAt: new Date() } 
+          : d
+      ));
+      toast({ 
+        title: 'Post programado', 
+        description: `Programado para ${format(scheduledAt, "d 'de' MMMM 'a las' HH:mm", { locale: es })}` 
+      });
+      setSelectedDraft(null);
+    }
+  };
 
   return (
     <MainLayout>
@@ -120,18 +173,40 @@ export function ApprovalPage() {
                                 <Eye className="h-4 w-4" />
                                 Ver detalle
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-success" />
-                                Aprobar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
+                              {draft.status !== 'approved' && draft.status !== 'published' && (
+                                <DropdownMenuItem 
+                                  className="gap-2"
+                                  onClick={() => handleApprove(draft)}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 text-success" />
+                                  Aprobar
+                                </DropdownMenuItem>
+                              )}
+                              {draft.status === 'approved' && (
+                                <DropdownMenuItem 
+                                  className="gap-2"
+                                  onClick={() => handlePublish(draft)}
+                                >
+                                  <Send className="h-4 w-4 text-primary" />
+                                  Marcar como publicado
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                className="gap-2"
+                                onClick={() => handleOpenSchedule(draft)}
+                              >
                                 <Calendar className="h-4 w-4" />
                                 Calendarizar
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2 text-destructive">
-                                <XCircle className="h-4 w-4" />
-                                Rechazar
-                              </DropdownMenuItem>
+                              {draft.status !== 'published' && (
+                                <DropdownMenuItem 
+                                  className="gap-2 text-destructive"
+                                  onClick={() => handleReject(draft)}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Rechazar
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -154,11 +229,20 @@ export function ApprovalPage() {
                       {/* Quick Actions */}
                       {draft.status === 'pending' && (
                         <div className="flex flex-col gap-2">
-                          <Button size="sm" className="gap-1 bg-success hover:bg-success/90">
+                          <Button 
+                            size="sm" 
+                            className="gap-1 bg-success hover:bg-success/90"
+                            onClick={() => handleApprove(draft)}
+                          >
                             <CheckCircle2 className="h-4 w-4" />
                             Aprobar
                           </Button>
-                          <Button size="sm" variant="outline" className="gap-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="gap-1"
+                            onClick={() => handleReview(draft)}
+                          >
                             <Eye className="h-4 w-4" />
                             Revisar
                           </Button>
@@ -167,11 +251,20 @@ export function ApprovalPage() {
                       
                       {draft.status === 'reviewed' && (
                         <div className="flex flex-col gap-2">
-                          <Button size="sm" className="gap-1 bg-success hover:bg-success/90">
+                          <Button 
+                            size="sm" 
+                            className="gap-1 bg-success hover:bg-success/90"
+                            onClick={() => handleApprove(draft)}
+                          >
                             <CheckCircle2 className="h-4 w-4" />
                             Aprobar
                           </Button>
-                          <Button size="sm" variant="outline" className="gap-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="gap-1"
+                            onClick={() => handleOpenSchedule(draft)}
+                          >
                             <Calendar className="h-4 w-4" />
                             Programar
                           </Button>
@@ -179,10 +272,25 @@ export function ApprovalPage() {
                       )}
                       
                       {draft.status === 'approved' && (
-                        <Button size="sm" className="gap-1">
-                          <Calendar className="h-4 w-4" />
-                          Programar
-                        </Button>
+                        <div className="flex flex-col gap-2">
+                          <Button 
+                            size="sm" 
+                            className="gap-1"
+                            onClick={() => handleOpenSchedule(draft)}
+                          >
+                            <Calendar className="h-4 w-4" />
+                            Programar
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="gap-1"
+                            onClick={() => handlePublish(draft)}
+                          >
+                            <Send className="h-4 w-4" />
+                            Publicar
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -198,6 +306,14 @@ export function ApprovalPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Schedule Dialog */}
+      <ScheduleDialog
+        open={scheduleDialogOpen}
+        onOpenChange={setScheduleDialogOpen}
+        onSchedule={handleSchedule}
+        currentSchedule={selectedDraft?.scheduledAt}
+      />
     </MainLayout>
   );
 }
