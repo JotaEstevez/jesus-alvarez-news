@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 import {
   Inbox,
   Calendar,
@@ -11,7 +12,8 @@ import {
   PenTool,
   ChevronLeft,
   ChevronRight,
-  Newspaper
+  Newspaper,
+  LogOut
 } from 'lucide-react';
 
 const navigation = [
@@ -27,6 +29,7 @@ const navigation = [
 export function Sidebar() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { signOut, user } = useAuth();
 
   return (
     <aside
@@ -80,8 +83,25 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Collapse Button */}
-      <div className="p-3 border-t border-sidebar-border">
+      {/* Footer */}
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        {/* User info */}
+        {!collapsed && user && (
+          <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">
+            {user.email}
+          </div>
+        )}
+        
+        {/* Sign out button */}
+        <button
+          onClick={signOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:bg-destructive/10 hover:text-destructive transition-colors"
+        >
+          <LogOut className="h-4 w-4 flex-shrink-0" />
+          {!collapsed && <span>Cerrar sesión</span>}
+        </button>
+        
+        {/* Collapse Button */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
