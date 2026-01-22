@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PlatformBadge } from '@/components/ui/platform-badge';
@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockNewsItems, mockDrafts } from '@/data/mockData';
+import { useNewsroom } from '@/context/NewsroomContext';
+import { useToast } from '@/hooks/use-toast';
 import { Platform } from '@/types/newsroom';
 import { 
   ArrowLeft,
@@ -32,21 +33,32 @@ const platformIcons = {
 };
 
 export function GeneratorPage() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const { newsId } = useParams<{ newsId: string }>();
-  const newsItem = mockNewsItems.find(item => item.id === newsId);
+  const { getNewsById, getDraftsForNews, generateDraftsForNews, updateDraft, updateDraftStatus, getReadyNews } = useNewsroom();
+  
+  const newsItem = newsId ? getNewsById(newsId) : null;
+  const readyNews = getReadyNews();
+  
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
   const [selectedVariant, setSelectedVariant] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [localContent, setLocalContent] = useState<Record<string, string>>({});
 
-  // Get drafts for this news item or use mock content
-  const drafts = newsId 
-    ? mockDrafts.filter(d => d.newsItemId === newsId)
-    : mockDrafts;
+  // Get drafts for this news item
+  const drafts = newsId ? getDraftsForNews(newsId) : [];
 
   const handleGenerate = () => {
+    if (!newsId) return;
+    
     setIsGenerating(true);
-    setTimeout(() => setIsGenerating(false), 2000);
+    setTimeout(() => {
+      generateDraftsForNews(newsId);
+      setIsGenerating(false);
+      toast({ title: 'Posts generados', description: '8 borradores creados (2 por plataforma)' });
+    }, 1500);
   };
 
   const handleCopy = (content: string, id: string) => {
@@ -56,6 +68,9 @@ export function GeneratorPage() {
   };
 
   const getDraftContent = (platform: Platform, variant: number) => {
+    const key = `${platform}-${variant}`;
+    if (localContent[key] !== undefined) return localContent[key];
+    
     const draft = drafts.find(d => d.platform === platform && d.variant === variant);
     if (draft) return draft.content;
     
@@ -69,6 +84,89 @@ export function GeneratorPage() {
     return defaultContent[platform];
   };
 
+  const handleContentChange = (platform: Platform, variant: number, content: string) => {
+    const key = `${platform}-${variant}`;
+    setLocalContent(prev => ({ ...prev, [key]: content }));
+    
+    // Update draft if it exists
+    const draft = drafts.find(d => d.platform === platform && d.variant === variant);
+    if (draft) {
+      updateDraft(draft.id, { content });
+    }
+  };
+
+  const handleSendToApproval = (platform: Platform, variant: number) => {
+    const draft = drafts.find(d => d.platform === platform && d.variant === variant);
+    if (draft) {
+      updateDraftStatus(draft.id, 'pending');
+      toast({ 
+        title: 'Enviado a aprobación',
+        description: `Borrador de ${platform === 'twitter' ? 'X' : platform} enviado para revisión.`
+      });
+    } else {
+      toast({ 
+        title: 'Genera primero',
+        description: 'Debes generar los borradores antes de enviarlos.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleSendAllToApproval = () => {
+    drafts.forEach(draft => {
+      updateDraftStatus(draft.id, 'pending');
+    });
+    toast({ 
+      title: 'Todos enviados a aprobación',
+      description: `${drafts.length} borradores enviados para revisión.`
+    });
+    navigate('/approval');
+  };
+
+  if (!newsId) {
+    // Show list of ready news
+    return (
+      <MainLayout>
+        <PageHeader 
+          title="Generador de Posts"
+          subtitle="Selecciona una noticia para generar posts"
+        />
+        <div className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Noticias listas para generar ({readyNews.length})</h2>
+          {readyNews.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No hay noticias marcadas como listas.</p>
+              <Link to="/inbox">
+                <Button variant="outline" className="mt-4">
+                  Ir al Inbox
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {readyNews.map(news => (
+                <Card key={news.id} className="shadow-card hover:shadow-soft transition-shadow">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{news.title}</p>
+                      <p className="text-sm text-muted-foreground">{news.source}</p>
+                    </div>
+                    <Link to={`/generator/${news.id}`}>
+                      <Button className="gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Generar Posts
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
       <PageHeader 
@@ -76,7 +174,7 @@ export function GeneratorPage() {
         subtitle={newsItem?.title}
         actions={
           <div className="flex items-center gap-3">
-            <Link to={newsId ? `/news/${newsId}` : '/inbox'}>
+            <Link to="/inbox">
               <Button variant="ghost" className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 Volver
@@ -92,8 +190,14 @@ export function GeneratorPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {isGenerating ? 'Generando...' : 'Regenerar Todo'}
+              {isGenerating ? 'Generando...' : drafts.length > 0 ? 'Regenerar Todo' : 'Generar Posts'}
             </Button>
+            {drafts.length > 0 && (
+              <Button onClick={handleSendAllToApproval} className="gap-2">
+                <Send className="h-4 w-4" />
+                Enviar Todos a Aprobación
+              </Button>
+            )}
           </div>
         }
       />
@@ -104,6 +208,7 @@ export function GeneratorPage() {
           <TabsList className="mb-6 bg-surface border border-border p-1">
             {platforms.map(platform => {
               const Icon = platformIcons[platform];
+              const hasDrafts = drafts.some(d => d.platform === platform);
               return (
                 <TabsTrigger
                   key={platform}
@@ -114,6 +219,9 @@ export function GeneratorPage() {
                   <span className="hidden sm:inline">
                     {platform === 'twitter' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)}
                   </span>
+                  {hasDrafts && (
+                    <span className="w-2 h-2 rounded-full bg-success" />
+                  )}
                 </TabsTrigger>
               );
             })}
@@ -170,7 +278,7 @@ export function GeneratorPage() {
                     <CardContent className="space-y-4">
                       <Textarea
                         value={getDraftContent(platform, variant)}
-                        onChange={() => {}}
+                        onChange={(e) => handleContentChange(platform, variant, e.target.value)}
                         className="min-h-[200px] resize-none font-mono text-sm"
                         onClick={() => setSelectedVariant(variant)}
                       />
@@ -178,7 +286,11 @@ export function GeneratorPage() {
                         <span className="text-xs text-muted-foreground">
                           {getDraftContent(platform, variant).length} caracteres
                         </span>
-                        <Button size="sm" className="gap-2">
+                        <Button 
+                          size="sm" 
+                          className="gap-2"
+                          onClick={() => handleSendToApproval(platform, variant)}
+                        >
                           <Send className="h-4 w-4" />
                           Enviar a Aprobación
                         </Button>
