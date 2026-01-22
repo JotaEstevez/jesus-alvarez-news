@@ -82,7 +82,16 @@ export function InboxPage() {
         subtitle={`${filteredNews.length} noticias capturadas`}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
+            <Button 
+              variant="outline" 
+              className="gap-2"
+              onClick={() => {
+                toast({ 
+                  title: 'Inbox actualizado', 
+                  description: `${newsItems.length} noticias en el sistema.` 
+                });
+              }}
+            >
               <RefreshCw className="h-4 w-4" />
               Actualizar
             </Button>
