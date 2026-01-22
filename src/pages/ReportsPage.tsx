@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PlatformBadge } from '@/components/ui/platform-badge';
@@ -13,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { mockDrafts, mockNewsItems } from '@/data/mockData';
+import { useNewsroom } from '@/context/NewsroomContext';
+import { Platform } from '@/types/newsroom';
 import { 
   Download,
   TrendingUp,
@@ -21,31 +23,106 @@ import {
   MessageSquare,
   Share2,
   BarChart3,
-  Calendar
+  Calendar,
+  Search
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, isWithinInterval, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// Mock metrics data
-const mockMetrics = {
-  totalPosts: 45,
-  totalImpressions: 125000,
-  totalEngagements: 8500,
-  avgEngagementRate: 6.8,
-  topPlatform: 'linkedin',
-};
-
-const platformStats = [
-  { platform: 'linkedin' as const, posts: 18, impressions: 65000, engagements: 4200, rate: 6.5 },
-  { platform: 'twitter' as const, posts: 15, impressions: 32000, engagements: 2100, rate: 6.6 },
-  { platform: 'instagram' as const, posts: 8, impressions: 18000, engagements: 1500, rate: 8.3 },
-  { platform: 'facebook' as const, posts: 4, impressions: 10000, engagements: 700, rate: 7.0 },
-];
-
 export function ReportsPage() {
+  const { drafts, newsItems } = useNewsroom();
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filter only published or approved drafts for reporting
+  const reportableDrafts = drafts.filter(d => 
+    d.status === 'published' || d.status === 'approved'
+  );
+  
+  const filteredDrafts = reportableDrafts.filter(draft => {
+    if (!searchQuery) return true;
+    const news = newsItems.find(n => n.id === draft.newsItemId);
+    return (
+      draft.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (news?.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
   const getNewsTitle = (newsItemId: string) => {
-    const news = mockNewsItems.find(n => n.id === newsItemId);
+    const news = newsItems.find(n => n.id === newsItemId);
     return news?.title || 'Noticia no encontrada';
+  };
+
+  // Calculate real metrics from drafts
+  const calculateMetrics = () => {
+    const published = drafts.filter(d => d.status === 'published');
+    const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const thisWeekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+    const lastWeekStart = startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
+    const lastWeekEnd = endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
+    
+    const thisWeekPosts = published.filter(d => 
+      isWithinInterval(d.updatedAt, { start: thisWeekStart, end: thisWeekEnd })
+    ).length;
+    
+    const lastWeekPosts = published.filter(d => 
+      isWithinInterval(d.updatedAt, { start: lastWeekStart, end: lastWeekEnd })
+    ).length;
+
+    return {
+      totalPosts: drafts.length,
+      publishedPosts: published.length,
+      pendingPosts: drafts.filter(d => d.status === 'pending').length,
+      approvedPosts: drafts.filter(d => d.status === 'approved').length,
+      thisWeekPosts,
+      lastWeekPosts,
+      weeklyChange: lastWeekPosts > 0 
+        ? Math.round(((thisWeekPosts - lastWeekPosts) / lastWeekPosts) * 100) 
+        : thisWeekPosts > 0 ? 100 : 0,
+    };
+  };
+
+  const metrics = calculateMetrics();
+
+  // Calculate platform stats
+  const calculatePlatformStats = () => {
+    const platforms: Platform[] = ['linkedin', 'twitter', 'instagram', 'facebook'];
+    return platforms.map(platform => {
+      const platformDrafts = drafts.filter(d => d.platform === platform);
+      const published = platformDrafts.filter(d => d.status === 'published').length;
+      const pending = platformDrafts.filter(d => d.status === 'pending').length;
+      const approved = platformDrafts.filter(d => d.status === 'approved').length;
+      
+      return {
+        platform,
+        total: platformDrafts.length,
+        published,
+        pending,
+        approved,
+        // Mock engagement data (in real app would come from API)
+        impressions: published * Math.floor(Math.random() * 5000 + 2000),
+        rate: (Math.random() * 5 + 3).toFixed(1),
+      };
+    });
+  };
+
+  const platformStats = calculatePlatformStats();
+
+  const handleExportCSV = () => {
+    const headers = ['Fecha', 'Plataforma', 'Estado', 'Contenido'];
+    const rows = filteredDrafts.map(draft => [
+      format(draft.updatedAt, 'yyyy-MM-dd'),
+      draft.platform,
+      draft.status,
+      `"${draft.content.replace(/"/g, '""').substring(0, 100)}..."`,
+    ]);
+    
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte-posts-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
   };
 
   return (
@@ -54,7 +131,7 @@ export function ReportsPage() {
         title="Reportes y Métricas"
         subtitle="Análisis de rendimiento de publicaciones"
         actions={
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
             Exportar CSV
           </Button>
@@ -69,13 +146,13 @@ export function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Posts Totales</p>
-                  <p className="text-3xl font-bold mt-1">{mockMetrics.totalPosts}</p>
+                  <p className="text-3xl font-bold mt-1">{metrics.totalPosts}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
                   <BarChart3 className="h-6 w-6 text-accent" />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Este mes</p>
+              <p className="text-xs text-muted-foreground mt-2">En todas las etapas</p>
             </CardContent>
           </Card>
           
@@ -83,34 +160,16 @@ export function ReportsPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Impresiones</p>
-                  <p className="text-3xl font-bold mt-1">{(mockMetrics.totalImpressions / 1000).toFixed(0)}K</p>
-                </div>
-                <div className="h-12 w-12 rounded-full bg-info/10 flex items-center justify-center">
-                  <Eye className="h-6 w-6 text-info" />
-                </div>
-              </div>
-              <p className="text-xs text-success mt-2 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                +12% vs mes anterior
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="shadow-card">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Interacciones</p>
-                  <p className="text-3xl font-bold mt-1">{(mockMetrics.totalEngagements / 1000).toFixed(1)}K</p>
+                  <p className="text-sm text-muted-foreground">Publicados</p>
+                  <p className="text-3xl font-bold mt-1">{metrics.publishedPosts}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center">
-                  <MessageSquare className="h-6 w-6 text-success" />
+                  <Eye className="h-6 w-6 text-success" />
                 </div>
               </div>
               <p className="text-xs text-success mt-2 flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
-                +8% vs mes anterior
+                {metrics.thisWeekPosts} esta semana
               </p>
             </CardContent>
           </Card>
@@ -119,14 +178,29 @@ export function ReportsPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Tasa de Engagement</p>
-                  <p className="text-3xl font-bold mt-1">{mockMetrics.avgEngagementRate}%</p>
+                  <p className="text-sm text-muted-foreground">Pendientes</p>
+                  <p className="text-3xl font-bold mt-1">{metrics.pendingPosts}</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center">
-                  <Share2 className="h-6 w-6 text-purple-500" />
+                <div className="h-12 w-12 rounded-full bg-warning/10 flex items-center justify-center">
+                  <MessageSquare className="h-6 w-6 text-warning" />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Promedio todas las redes</p>
+              <p className="text-xs text-muted-foreground mt-2">Esperando revisión</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="shadow-card">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Aprobados</p>
+                  <p className="text-3xl font-bold mt-1">{metrics.approvedPosts}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-info/10 flex items-center justify-center">
+                  <Share2 className="h-6 w-6 text-info" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Listos para publicar</p>
             </CardContent>
           </Card>
         </div>
@@ -148,16 +222,20 @@ export function ReportsPage() {
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Posts</span>
-                      <span className="font-medium">{stat.posts}</span>
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-medium">{stat.total}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Impresiones</span>
-                      <span className="font-medium">{(stat.impressions / 1000).toFixed(0)}K</span>
+                      <span className="text-muted-foreground">Publicados</span>
+                      <span className="font-medium text-success">{stat.published}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Engagement</span>
-                      <span className="font-medium text-success">{stat.rate}%</span>
+                      <span className="text-muted-foreground">Pendientes</span>
+                      <span className="font-medium text-warning">{stat.pending}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Aprobados</span>
+                      <span className="font-medium text-info">{stat.approved}</span>
                     </div>
                   </div>
                 </div>
@@ -169,12 +247,17 @@ export function ReportsPage() {
         {/* Publications Table */}
         <Card className="shadow-soft">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Historial de Publicaciones</CardTitle>
+            <CardTitle className="text-base">Historial de Posts</CardTitle>
             <div className="flex items-center gap-2">
-              <Input 
-                placeholder="Buscar publicaciones..." 
-                className="w-[200px]"
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar posts..." 
+                  className="w-[200px] pl-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -185,36 +268,43 @@ export function ReportsPage() {
                   <TableHead>Plataforma</TableHead>
                   <TableHead>Contenido</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Impresiones</TableHead>
-                  <TableHead className="text-right">Engagements</TableHead>
+                  <TableHead>Variante</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockDrafts.map(draft => (
-                  <TableRow key={draft.id}>
-                    <TableCell className="text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {format(draft.updatedAt, "d MMM", { locale: es })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <PlatformBadge platform={draft.platform} size="sm" />
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      <p className="text-sm truncate">{draft.content}</p>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={draft.status} size="sm" />
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {draft.status === 'published' ? '12.5K' : '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {draft.status === 'published' ? '856' : '-'}
+                {filteredDrafts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No hay posts publicados o aprobados todavía
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredDrafts.map(draft => (
+                    <TableRow key={draft.id}>
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {format(draft.updatedAt, "d MMM", { locale: es })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <PlatformBadge platform={draft.platform} size="sm" />
+                      </TableCell>
+                      <TableCell className="max-w-[300px]">
+                        <p className="text-sm truncate">{draft.content}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {getNewsTitle(draft.newsItemId)}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={draft.status} size="sm" />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        V{draft.variant}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

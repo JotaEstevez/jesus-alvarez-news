@@ -13,7 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockNewsItems, mockTopics, mockSources } from '@/data/mockData';
+import { useNewsroom } from '@/context/NewsroomContext';
+import { AddNewsDialog } from '@/components/inbox/AddNewsDialog';
+import { DeleteConfirmDialog } from '@/components/settings/DeleteConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Search, 
   Filter, 
@@ -21,18 +24,28 @@ import {
   Clock, 
   ArrowRight,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Plus,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export function InboxPage() {
+  const { toast } = useToast();
+  const { newsItems, topics, sources, deleteNewsItem, markNewsAsReady } = useNewsroom();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [scoreFilter, setScoreFilter] = useState<string>('all');
   const [topicFilter, setTopicFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string; title: string }>({
+    open: false, id: '', title: ''
+  });
 
-  const filteredNews = mockNewsItems.filter(item => {
+  const filteredNews = newsItems.filter(item => {
     if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
@@ -44,16 +57,40 @@ export function InboxPage() {
     return true;
   });
 
+  const handleDelete = (id: string, title: string) => {
+    setDeleteDialog({ open: true, id, title });
+  };
+
+  const confirmDelete = () => {
+    deleteNewsItem(deleteDialog.id);
+    toast({ title: 'Noticia eliminada' });
+    setDeleteDialog({ open: false, id: '', title: '' });
+  };
+
+  const handleMarkReady = (id: string, title: string) => {
+    markNewsAsReady(id);
+    toast({ 
+      title: 'Noticia lista para generar', 
+      description: `"${title.substring(0, 50)}..." está lista para crear posts.` 
+    });
+  };
+
   return (
     <MainLayout>
       <PageHeader 
         title="Inbox de Noticias"
-        subtitle={`${filteredNews.length} noticias capturadas hoy`}
+        subtitle={`${filteredNews.length} noticias capturadas`}
         actions={
-          <Button className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Actualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Actualizar
+            </Button>
+            <Button className="gap-2" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Añadir Noticia
+            </Button>
+          </div>
         }
       />
       
@@ -89,7 +126,7 @@ export function InboxPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los temas</SelectItem>
-              {mockTopics.map(topic => (
+              {topics.map(topic => (
                 <SelectItem key={topic.id} value={topic.name}>
                   {topic.name}
                 </SelectItem>
@@ -103,7 +140,7 @@ export function InboxPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las fuentes</SelectItem>
-              {mockSources.map(source => (
+              {sources.map(source => (
                 <SelectItem key={source.id} value={source.name}>
                   {source.name}
                 </SelectItem>
@@ -152,6 +189,17 @@ export function InboxPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      {item.status !== 'ready' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-1"
+                          onClick={() => handleMarkReady(item.id, item.title)}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Marcar lista
+                        </Button>
+                      )}
                       <Link to={`/news/${item.id}`}>
                         <Button variant="ghost" size="sm" className="gap-1">
                           Ver detalle
@@ -164,6 +212,14 @@ export function InboxPage() {
                           Generar
                         </Button>
                       </Link>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-destructive"
+                        onClick={() => handleDelete(item.id, item.title)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                   
@@ -187,13 +243,42 @@ export function InboxPage() {
                         Nueva
                       </Badge>
                     )}
+                    {item.status === 'ready' && (
+                      <Badge className="bg-success/10 text-success border-success/20 text-xs">
+                        Lista
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
             </article>
           ))}
+
+          {filteredNews.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No hay noticias que coincidan con los filtros</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setAddDialogOpen(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Añadir primera noticia
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+
+      <AddNewsDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      
+      <DeleteConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        itemName={deleteDialog.title.substring(0, 50) + '...'}
+        itemType="noticia"
+        onConfirm={confirmDelete}
+      />
     </MainLayout>
   );
 }

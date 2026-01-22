@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { mockTopics, mockEntities, mockSources, mockKeywords } from '@/data/mockData';
+import { useNewsroom } from '@/context/NewsroomContext';
 import { Topic, Entity, Source, Keyword } from '@/types/newsroom';
 import { TopicDialog } from '@/components/settings/TopicDialog';
 import { EntityDialog } from '@/components/settings/EntityDialog';
@@ -36,13 +36,14 @@ import {
 
 export function SettingsPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('topics');
+  const { 
+    topics, setTopics, 
+    entities, setEntities, 
+    sources, setSources, 
+    keywords, setKeywords 
+  } = useNewsroom();
   
-  // State for data
-  const [topics, setTopics] = useState<Topic[]>(mockTopics);
-  const [entities, setEntities] = useState<Entity[]>(mockEntities);
-  const [sources, setSources] = useState<Source[]>(mockSources);
-  const [keywords, setKeywords] = useState<Keyword[]>(mockKeywords);
+  const [activeTab, setActiveTab] = useState('topics');
   
   // Dialog states
   const [topicDialogOpen, setTopicDialogOpen] = useState(false);
@@ -583,7 +584,9 @@ export function SettingsPage() {
                 </div>
                 
                 <div className="pt-4 border-t border-border">
-                  <Button>Guardar Configuración</Button>
+                  <Button onClick={() => toast({ title: 'Configuración guardada' })}>
+                    Guardar Configuración
+                  </Button>
                 </div>
               </CardContent>
             </Card>

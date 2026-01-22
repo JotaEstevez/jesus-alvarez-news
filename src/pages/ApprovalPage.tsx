@@ -6,10 +6,10 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockDrafts, mockNewsItems } from '@/data/mockData';
-import { PostDraft, PostStatus } from '@/types/newsroom';
+import { useNewsroom } from '@/context/NewsroomContext';
 import { ScheduleDialog } from '@/components/approval/ScheduleDialog';
 import { useToast } from '@/hooks/use-toast';
+import { PostStatus } from '@/types/newsroom';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -38,17 +38,18 @@ const statusTabs: { value: PostStatus | 'all'; label: string }[] = [
 
 export function ApprovalPage() {
   const { toast } = useToast();
+  const { drafts, newsItems, updateDraftStatus, deleteDraft, scheduleDraft } = useNewsroom();
+  
   const [activeTab, setActiveTab] = useState<PostStatus | 'all'>('all');
-  const [drafts, setDrafts] = useState<PostDraft[]>(mockDrafts);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const [selectedDraft, setSelectedDraft] = useState<PostDraft | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
   const filteredDrafts = activeTab === 'all' 
     ? drafts 
     : drafts.filter(draft => draft.status === activeTab);
 
   const getNewsTitle = (newsItemId: string) => {
-    const news = mockNewsItems.find(n => n.id === newsItemId);
+    const news = newsItems.find(n => n.id === newsItemId);
     return news?.title || 'Noticia no encontrada';
   };
 
@@ -64,49 +65,39 @@ export function ApprovalPage() {
 
   const counts = getStatusCounts();
 
-  const updateDraftStatus = (draftId: string, newStatus: PostStatus, message: string) => {
-    setDrafts(prev => prev.map(d => 
-      d.id === draftId 
-        ? { ...d, status: newStatus, updatedAt: new Date() } 
-        : d
-    ));
-    toast({ title: message });
+  const handleApprove = (draftId: string) => {
+    updateDraftStatus(draftId, 'approved');
+    toast({ title: 'Post aprobado correctamente' });
   };
 
-  const handleApprove = (draft: PostDraft) => {
-    updateDraftStatus(draft.id, 'approved', `Post aprobado correctamente`);
+  const handleReview = (draftId: string) => {
+    updateDraftStatus(draftId, 'reviewed');
+    toast({ title: 'Post marcado como revisado' });
   };
 
-  const handleReview = (draft: PostDraft) => {
-    updateDraftStatus(draft.id, 'reviewed', `Post marcado como revisado`);
+  const handlePublish = (draftId: string) => {
+    updateDraftStatus(draftId, 'published');
+    toast({ title: 'Post marcado como publicado' });
   };
 
-  const handlePublish = (draft: PostDraft) => {
-    updateDraftStatus(draft.id, 'published', `Post marcado como publicado`);
-  };
-
-  const handleReject = (draft: PostDraft) => {
-    setDrafts(prev => prev.filter(d => d.id !== draft.id));
+  const handleReject = (draftId: string) => {
+    deleteDraft(draftId);
     toast({ title: 'Post rechazado', description: 'El post ha sido eliminado de la lista.' });
   };
 
-  const handleOpenSchedule = (draft: PostDraft) => {
-    setSelectedDraft(draft);
+  const handleOpenSchedule = (draftId: string) => {
+    setSelectedDraftId(draftId);
     setScheduleDialogOpen(true);
   };
 
   const handleSchedule = (scheduledAt: Date) => {
-    if (selectedDraft) {
-      setDrafts(prev => prev.map(d => 
-        d.id === selectedDraft.id 
-          ? { ...d, scheduledAt, updatedAt: new Date() } 
-          : d
-      ));
+    if (selectedDraftId) {
+      scheduleDraft(selectedDraftId, scheduledAt);
       toast({ 
         title: 'Post programado', 
         description: `Programado para ${format(scheduledAt, "d 'de' MMMM 'a las' HH:mm", { locale: es })}` 
       });
-      setSelectedDraft(null);
+      setSelectedDraftId(null);
     }
   };
 
@@ -176,7 +167,7 @@ export function ApprovalPage() {
                               {draft.status !== 'approved' && draft.status !== 'published' && (
                                 <DropdownMenuItem 
                                   className="gap-2"
-                                  onClick={() => handleApprove(draft)}
+                                  onClick={() => handleApprove(draft.id)}
                                 >
                                   <CheckCircle2 className="h-4 w-4 text-success" />
                                   Aprobar
@@ -185,7 +176,7 @@ export function ApprovalPage() {
                               {draft.status === 'approved' && (
                                 <DropdownMenuItem 
                                   className="gap-2"
-                                  onClick={() => handlePublish(draft)}
+                                  onClick={() => handlePublish(draft.id)}
                                 >
                                   <Send className="h-4 w-4 text-primary" />
                                   Marcar como publicado
@@ -193,7 +184,7 @@ export function ApprovalPage() {
                               )}
                               <DropdownMenuItem 
                                 className="gap-2"
-                                onClick={() => handleOpenSchedule(draft)}
+                                onClick={() => handleOpenSchedule(draft.id)}
                               >
                                 <Calendar className="h-4 w-4" />
                                 Calendarizar
@@ -201,7 +192,7 @@ export function ApprovalPage() {
                               {draft.status !== 'published' && (
                                 <DropdownMenuItem 
                                   className="gap-2 text-destructive"
-                                  onClick={() => handleReject(draft)}
+                                  onClick={() => handleReject(draft.id)}
                                 >
                                   <XCircle className="h-4 w-4" />
                                   Rechazar
@@ -232,7 +223,7 @@ export function ApprovalPage() {
                           <Button 
                             size="sm" 
                             className="gap-1 bg-success hover:bg-success/90"
-                            onClick={() => handleApprove(draft)}
+                            onClick={() => handleApprove(draft.id)}
                           >
                             <CheckCircle2 className="h-4 w-4" />
                             Aprobar
@@ -241,7 +232,7 @@ export function ApprovalPage() {
                             size="sm" 
                             variant="outline" 
                             className="gap-1"
-                            onClick={() => handleReview(draft)}
+                            onClick={() => handleReview(draft.id)}
                           >
                             <Eye className="h-4 w-4" />
                             Revisar
@@ -254,7 +245,7 @@ export function ApprovalPage() {
                           <Button 
                             size="sm" 
                             className="gap-1 bg-success hover:bg-success/90"
-                            onClick={() => handleApprove(draft)}
+                            onClick={() => handleApprove(draft.id)}
                           >
                             <CheckCircle2 className="h-4 w-4" />
                             Aprobar
@@ -263,7 +254,7 @@ export function ApprovalPage() {
                             size="sm" 
                             variant="outline" 
                             className="gap-1"
-                            onClick={() => handleOpenSchedule(draft)}
+                            onClick={() => handleOpenSchedule(draft.id)}
                           >
                             <Calendar className="h-4 w-4" />
                             Programar
@@ -276,7 +267,7 @@ export function ApprovalPage() {
                           <Button 
                             size="sm" 
                             className="gap-1"
-                            onClick={() => handleOpenSchedule(draft)}
+                            onClick={() => handleOpenSchedule(draft.id)}
                           >
                             <Calendar className="h-4 w-4" />
                             Programar
@@ -285,7 +276,7 @@ export function ApprovalPage() {
                             size="sm" 
                             variant="outline" 
                             className="gap-1"
-                            onClick={() => handlePublish(draft)}
+                            onClick={() => handlePublish(draft.id)}
                           >
                             <Send className="h-4 w-4" />
                             Publicar
@@ -312,7 +303,7 @@ export function ApprovalPage() {
         open={scheduleDialogOpen}
         onOpenChange={setScheduleDialogOpen}
         onSchedule={handleSchedule}
-        currentSchedule={selectedDraft?.scheduledAt}
+        currentSchedule={selectedDraftId ? drafts.find(d => d.id === selectedDraftId)?.scheduledAt : undefined}
       />
     </MainLayout>
   );
