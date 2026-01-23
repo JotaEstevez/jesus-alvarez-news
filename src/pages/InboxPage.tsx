@@ -61,18 +61,26 @@ export function InboxPage() {
     setDeleteDialog({ open: true, id, title });
   };
 
-  const confirmDelete = () => {
-    deleteNewsItem(deleteDialog.id);
-    toast({ title: 'Noticia eliminada' });
+  const confirmDelete = async () => {
+    try {
+      await deleteNewsItem(deleteDialog.id);
+      toast({ title: 'Noticia eliminada' });
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+    }
     setDeleteDialog({ open: false, id: '', title: '' });
   };
 
-  const handleMarkReady = (id: string, title: string) => {
-    markNewsAsReady(id);
-    toast({ 
-      title: 'Noticia lista para generar', 
-      description: `"${title.substring(0, 50)}..." está lista para crear posts.` 
-    });
+  const handleMarkReady = async (id: string, title: string) => {
+    try {
+      await markNewsAsReady(id);
+      toast({ 
+        title: 'Noticia lista para generar', 
+        description: `"${title.substring(0, 50)}..." está lista para crear posts.` 
+      });
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
+    }
   };
 
   return (
@@ -183,7 +191,7 @@ export function InboxPage() {
                         <span className="font-medium text-foreground/80">{item.source}</span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5" />
-                          {format(item.publishedAt, "d MMM, HH:mm", { locale: es })}
+                          {format(item.capturedAt, "d MMM, HH:mm", { locale: es })}
                         </span>
                         <a 
                           href={item.url} 

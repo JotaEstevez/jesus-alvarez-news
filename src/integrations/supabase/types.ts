@@ -14,6 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
+      entities: {
+        Row: {
+          aliases: string[] | null
+          created_at: string
+          id: string
+          name: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          aliases?: string[] | null
+          created_at?: string
+          id?: string
+          name: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          aliases?: string[] | null
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      keywords: {
+        Row: {
+          created_at: string
+          id: string
+          term: string
+          type: string
+          updated_at: string
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          term: string
+          type: string
+          updated_at?: string
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          term?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
+      news_items: {
+        Row: {
+          captured_at: string
+          created_at: string
+          editorial_angle: string | null
+          entities: string[] | null
+          id: string
+          key_points: string[] | null
+          published_at: string | null
+          score: number
+          source: string
+          status: string
+          summary: string | null
+          title: string
+          topics: string[] | null
+          updated_at: string
+          url: string
+          user_id: string
+          verification_risks: string[] | null
+        }
+        Insert: {
+          captured_at?: string
+          created_at?: string
+          editorial_angle?: string | null
+          entities?: string[] | null
+          id?: string
+          key_points?: string[] | null
+          published_at?: string | null
+          score?: number
+          source: string
+          status?: string
+          summary?: string | null
+          title: string
+          topics?: string[] | null
+          updated_at?: string
+          url: string
+          user_id: string
+          verification_risks?: string[] | null
+        }
+        Update: {
+          captured_at?: string
+          created_at?: string
+          editorial_angle?: string | null
+          entities?: string[] | null
+          id?: string
+          key_points?: string[] | null
+          published_at?: string | null
+          score?: number
+          source?: string
+          status?: string
+          summary?: string | null
+          title?: string
+          topics?: string[] | null
+          updated_at?: string
+          url?: string
+          user_id?: string
+          verification_risks?: string[] | null
+        }
+        Relationships: []
+      }
+      post_drafts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          news_item_id: string | null
+          platform: string
+          scheduled_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          variant: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          news_item_id?: string | null
+          platform: string
+          scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          variant?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          news_item_id?: string | null
+          platform?: string
+          scheduled_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          variant?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_drafts_news_item_id_fkey"
+            columns: ["news_item_id"]
+            isOneToOne: false
+            referencedRelation: "news_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -33,6 +200,69 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sources: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          name: string
+          reliability: number
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          name: string
+          reliability?: number
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          reliability?: number
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      topics: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          priority: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          priority?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          priority?: number
           updated_at?: string
           user_id?: string
         }

@@ -1,13 +1,13 @@
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook';
 
-export type PostStatus = 'pending' | 'reviewed' | 'approved' | 'published';
+export type PostStatus = 'pending' | 'reviewed' | 'approved' | 'scheduled' | 'rejected' | 'published';
 
 export interface NewsItem {
   id: string;
   url: string;
   title: string;
   source: string;
-  publishedAt: Date;
+  publishedAt?: Date;
   capturedAt: Date;
   summary: string;
   keyPoints: string[];
@@ -16,7 +16,7 @@ export interface NewsItem {
   score: number;
   topics: string[];
   entities: string[];
-  status: 'new' | 'processing' | 'ready' | 'discarded';
+  status: 'new' | 'processing' | 'ready' | 'generating' | 'published' | 'discarded';
 }
 
 export interface PostDraft {

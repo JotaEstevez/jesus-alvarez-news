@@ -36,7 +36,7 @@ export function AddNewsDialog({ open, onOpenChange }: AddNewsDialogProps) {
     }
   }, [open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const newsData: Omit<NewsItem, 'id' | 'capturedAt' | 'score'> = {
@@ -53,8 +53,12 @@ export function AddNewsDialog({ open, onOpenChange }: AddNewsDialogProps) {
       status: 'new',
     };
     
-    addNewsItem(newsData);
-    onOpenChange(false);
+    try {
+      await addNewsItem(newsData);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error adding news:', error);
+    }
   };
 
   const toggleTopic = (topicName: string) => {
