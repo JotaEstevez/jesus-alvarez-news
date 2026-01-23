@@ -1,19 +1,49 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface GeneratePostsRequest {
-  newsTitle: string;
-  newsSummary: string;
-  newsUrl: string;
-  newsSource: string;
-  topics: string[];
-  platform: 'linkedin' | 'twitter' | 'instagram' | 'facebook';
-  variant: number;
+// ============================================
+// VALIDACIÓN DE INPUTS CON ZOD
+// ============================================
+const RequestSchema = z.object({
+  newsTitle: z.string()
+    .min(1, "El título es requerido")
+    .max(500, "El título no puede superar 500 caracteres"),
+  newsSummary: z.string()
+    .max(5000, "El resumen no puede superar 5000 caracteres")
+    .default(""),
+  newsUrl: z.string()
+    .url("La URL no es válida")
+    .max(2000, "La URL no puede superar 2000 caracteres"),
+  newsSource: z.string()
+    .max(200, "La fuente no puede superar 200 caracteres")
+    .default(""),
+  topics: z.array(
+    z.string().max(100, "Cada tema no puede superar 100 caracteres")
+  ).max(20, "Máximo 20 temas permitidos").default([]),
+  platform: z.enum(['linkedin', 'twitter', 'instagram', 'facebook'], {
+    errorMap: () => ({ message: "Plataforma no válida. Usa: linkedin, twitter, instagram o facebook" })
+  }),
+  variant: z.number()
+    .int("La variante debe ser un número entero")
+    .min(1, "La variante mínima es 1")
+    .max(3, "La variante máxima es 3"),
+});
+
+type GeneratePostsRequest = z.infer<typeof RequestSchema>;
+
+// Función para sanitizar texto (prevenir prompt injection)
+function sanitizeText(text: string): string {
+  // Remover caracteres de control y normalizar espacios
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Caracteres de control
+    .replace(/\r\n|\r/g, '\n') // Normalizar saltos de línea
+    .trim();
 }
 
 // ============================================
@@ -169,10 +199,44 @@ serve(async (req) => {
     console.log(`Authenticated user: ${userId}`);
 
     // ============================================
+    // VALIDACIÓN DE INPUTS
+    // ============================================
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      console.error('Invalid JSON body');
+      return new Response(
+        JSON.stringify({ error: 'El cuerpo de la solicitud no es JSON válido.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const validationResult = RequestSchema.safeParse(rawBody);
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(e => e.message).join(', ');
+      console.error('Validation failed:', errorMessages);
+      return new Response(
+        JSON.stringify({ error: `Datos inválidos: ${errorMessages}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Datos validados y sanitizados
+    const validated = validationResult.data;
+    const newsTitle = sanitizeText(validated.newsTitle);
+    const newsSummary = sanitizeText(validated.newsSummary);
+    const newsUrl = validated.newsUrl;
+    const newsSource = sanitizeText(validated.newsSource);
+    const topics = validated.topics.map(t => sanitizeText(t));
+    const platform = validated.platform;
+    const variant = validated.variant;
+
+    console.log(`Processing validated request for platform: ${platform}, variant: ${variant}`);
+    
+    // ============================================
     // LÓGICA DE NEGOCIO
     // ============================================
-    const { newsTitle, newsSummary, newsUrl, newsSource, topics, platform, variant } = await req.json() as GeneratePostsRequest;
-    
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
