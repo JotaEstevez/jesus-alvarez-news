@@ -711,14 +711,14 @@ export function GeneratorPage() {
         {/* Reglas Editoriales */}
         <Card className="bg-muted/50 border-dashed">
           <CardContent className="p-4">
-            <h4 className="font-medium text-sm text-foreground mb-2">📝 Reglas Editoriales Aplicadas</h4>
-            <ul className="text-xs text-muted-foreground space-y-1 grid grid-cols-1 md:grid-cols-2 gap-x-4">
-              <li>• <strong>Plantilla:</strong> Gancho → Contexto → 3 Claves → Cierre</li>
-              <li>• <strong>Tono:</strong> Opinión suave, criterio y matices</li>
-              <li>• <strong>LinkedIn:</strong> 900-1.400 caracteres, reflexivo</li>
-              <li>• <strong>X:</strong> 180-280 caracteres, 1 idea + dato</li>
-              <li>• <strong>Facebook:</strong> 300-700 caracteres, narrativo</li>
-              <li>• <strong>Hashtags:</strong> Máximo 2-4 relevantes</li>
+            <h4 className="font-medium text-sm text-foreground mb-3">📝 Reglas Editoriales Aplicadas</h4>
+            <ul className="text-xs text-muted-foreground space-y-2">
+              <li>• <strong>Plantilla:</strong> Gancho → Contexto → 3 claves → Cierre (pregunta / qué observar)</li>
+              <li>• <strong>Tono:</strong> Opinión suave, criterio y matices (sin ataques personales ni sentencias absolutas)</li>
+              <li>• <strong>LinkedIn:</strong> 800–1.400 caracteres, máximo 2–3 párrafos + 3 bullets, 2–4 hashtags</li>
+              <li>• <strong>X:</strong> 120–280 caracteres (preferente 120–220), 1 idea + dato/contexto + pregunta, 0–2 hashtags</li>
+              <li>• <strong>Facebook:</strong> 250–600 caracteres, narrativo/directo, 0–2 hashtags</li>
+              <li>• <strong>Rigor:</strong> Sin rumores sin fuente fiable; en fichajes/lesiones usar condicional + fuente o descartar; 1 noticia por post; incluir fuentes (medio + URL)</li>
             </ul>
           </CardContent>
         </Card>
