@@ -40,6 +40,8 @@ export function SettingsPage() {
   const { toast } = useToast();
   const { 
     loading,
+    error,
+    dataLoaded,
     topics, 
     entities, 
     sources, 
@@ -218,13 +220,36 @@ export function SettingsPage() {
     <div className="space-y-3">
       {[1,2,3].map(i => (
         <div key={i} className="flex gap-4">
-          <Skeleton className="h-8 flex-1" />
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-8 w-20" />
+          <div className="h-8 flex-1 bg-muted animate-pulse rounded" />
+          <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+          <div className="h-8 w-20 bg-muted animate-pulse rounded" />
         </div>
       ))}
     </div>
   );
+
+  // Show connection status
+  const ConnectionStatus = () => {
+    if (error) {
+      return (
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-center gap-2 text-destructive">
+          <span className="text-sm">⚠️ {error}</span>
+          <Button variant="outline" size="sm" onClick={reload}>
+            Reintentar
+          </Button>
+        </div>
+      );
+    }
+    if (dataLoaded && !loading) {
+      return (
+        <div className="mb-4 p-2 bg-green-500/10 border border-green-500/30 rounded-lg text-green-600 text-xs flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          Conectado a Supabase • {topics.length} topics, {entities.length} entidades, {sources.length} fuentes, {keywords.length} keywords
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <MainLayout>
@@ -240,6 +265,7 @@ export function SettingsPage() {
       />
       
       <div className="p-6">
+        <ConnectionStatus />
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 bg-surface border border-border p-1">
             <TabsTrigger value="topics" className="gap-2 data-[state=active]:bg-background">
