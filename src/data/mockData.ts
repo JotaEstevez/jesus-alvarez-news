@@ -43,6 +43,7 @@ export const mockSources: Source[] = [
 ];
 
 export const mockKeywords: Keyword[] = [
+  // Keywords existentes
   { id: '1', term: 'inteligencia artificial', type: 'impact', weight: 10 },
   { id: '2', term: 'startup', type: 'impact', weight: 8 },
   { id: '3', term: 'polémica', type: 'negative', weight: -5 },
@@ -50,6 +51,23 @@ export const mockKeywords: Keyword[] = [
   { id: '5', term: 'legado', type: 'impact', weight: 8 },
   { id: '6', term: 'derechos TV', type: 'impact', weight: 9 },
   { id: '7', term: 'Mundial', type: 'impact', weight: 10 },
+  // Keywords principales deportivas
+  { id: '8', term: 'fichaje', type: 'impact', weight: 8 },
+  { id: '9', term: 'récord', type: 'impact', weight: 9 },
+  { id: '10', term: 'histórico', type: 'impact', weight: 10 },
+  { id: '11', term: 'debut', type: 'impact', weight: 7 },
+  { id: '12', term: 'retirada', type: 'impact', weight: 10 },
+  { id: '13', term: 'audiencia', type: 'impact', weight: 8 },
+  // Keywords extras
+  { id: '14', term: 'lesión', type: 'impact', weight: 6 },
+  { id: '15', term: 'campeón', type: 'impact', weight: 9 },
+  { id: '16', term: 'clasificación', type: 'impact', weight: 6 },
+  { id: '17', term: 'exclusiva', type: 'impact', weight: 7 },
+  { id: '18', term: 'AEPD', type: 'impact', weight: 10 },
+  // Keywords negativas
+  { id: '19', term: 'rumor', type: 'negative', weight: -7 },
+  { id: '20', term: 'apuestas', type: 'negative', weight: -10 },
+  { id: '21', term: 'pelea', type: 'negative', weight: -6 },
 ];
 
 export const mockNewsItems: NewsItem[] = [
