@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { PostStatus } from '@/types/newsroom';
-import { Clock, Eye, CheckCircle2, Send } from 'lucide-react';
+import { Clock, Eye, CheckCircle2, Send, Calendar, XCircle } from 'lucide-react';
 
 interface StatusBadgeProps {
   status: PostStatus;
@@ -27,6 +27,16 @@ const statusConfig: Record<PostStatus, {
     icon: CheckCircle2,
     label: 'Aprobado',
     className: 'bg-success/10 text-success border-success/20',
+  },
+  scheduled: {
+    icon: Calendar,
+    label: 'Programado',
+    className: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  },
+  rejected: {
+    icon: XCircle,
+    label: 'Rechazado',
+    className: 'bg-destructive/10 text-destructive border-destructive/20',
   },
   published: {
     icon: Send,

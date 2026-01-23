@@ -23,6 +23,7 @@ import { SourceDialog } from '@/components/settings/SourceDialog';
 import { KeywordDialog } from '@/components/settings/KeywordDialog';
 import { DeleteConfirmDialog } from '@/components/settings/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Plus, 
   Pencil, 
@@ -31,19 +32,31 @@ import {
   Building2,
   Globe,
   Key,
-  Sliders
+  Sliders,
+  RefreshCw
 } from 'lucide-react';
 
 export function SettingsPage() {
   const { toast } = useToast();
   const { 
-    topics, setTopics, 
-    entities, setEntities, 
-    sources, setSources, 
-    keywords, setKeywords 
+    loading,
+    topics, 
+    entities, 
+    sources, 
+    keywords,
+    saveTopic,
+    deleteTopic,
+    saveEntity,
+    deleteEntity,
+    saveSource,
+    deleteSource,
+    saveKeyword,
+    deleteKeyword,
+    reload
   } = useNewsroom();
   
   const [activeTab, setActiveTab] = useState('topics');
+  const [saving, setSaving] = useState(false);
   
   // Dialog states
   const [topicDialogOpen, setTopicDialogOpen] = useState(false);
@@ -66,16 +79,20 @@ export function SettingsPage() {
   }>({ open: false, itemName: '', itemType: '', onConfirm: () => {} });
 
   // Topic handlers
-  const handleSaveTopic = (topicData: Omit<Topic, 'id'> & { id?: string }) => {
-    if (topicData.id) {
-      setTopics(prev => prev.map(t => t.id === topicData.id ? { ...topicData, id: topicData.id } as Topic : t));
-      toast({ title: 'Topic actualizado', description: `"${topicData.name}" se ha actualizado correctamente.` });
-    } else {
-      const newTopic: Topic = { ...topicData, id: crypto.randomUUID() };
-      setTopics(prev => [...prev, newTopic]);
-      toast({ title: 'Topic añadido', description: `"${topicData.name}" se ha añadido correctamente.` });
+  const handleSaveTopic = async (topicData: Omit<Topic, 'id'> & { id?: string }) => {
+    setSaving(true);
+    try {
+      await saveTopic(topicData);
+      toast({ 
+        title: topicData.id ? 'Topic actualizado' : 'Topic añadido', 
+        description: `"${topicData.name}" se ha ${topicData.id ? 'actualizado' : 'añadido'} correctamente.` 
+      });
+      setEditingTopic(null);
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo guardar el topic', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setEditingTopic(null);
   };
 
   const handleDeleteTopic = (topic: Topic) => {
@@ -83,25 +100,33 @@ export function SettingsPage() {
       open: true,
       itemName: topic.name,
       itemType: 'topic',
-      onConfirm: () => {
-        setTopics(prev => prev.filter(t => t.id !== topic.id));
-        toast({ title: 'Topic eliminado', description: `"${topic.name}" se ha eliminado.` });
+      onConfirm: async () => {
+        try {
+          await deleteTopic(topic.id);
+          toast({ title: 'Topic eliminado', description: `"${topic.name}" se ha eliminado.` });
+        } catch (error) {
+          toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+        }
         setDeleteDialog(prev => ({ ...prev, open: false }));
       }
     });
   };
 
   // Entity handlers
-  const handleSaveEntity = (entityData: Omit<Entity, 'id'> & { id?: string }) => {
-    if (entityData.id) {
-      setEntities(prev => prev.map(e => e.id === entityData.id ? { ...entityData, id: entityData.id } as Entity : e));
-      toast({ title: 'Entidad actualizada', description: `"${entityData.name}" se ha actualizado correctamente.` });
-    } else {
-      const newEntity: Entity = { ...entityData, id: crypto.randomUUID() };
-      setEntities(prev => [...prev, newEntity]);
-      toast({ title: 'Entidad añadida', description: `"${entityData.name}" se ha añadido correctamente.` });
+  const handleSaveEntity = async (entityData: Omit<Entity, 'id'> & { id?: string }) => {
+    setSaving(true);
+    try {
+      await saveEntity(entityData);
+      toast({ 
+        title: entityData.id ? 'Entidad actualizada' : 'Entidad añadida', 
+        description: `"${entityData.name}" se ha ${entityData.id ? 'actualizado' : 'añadido'} correctamente.` 
+      });
+      setEditingEntity(null);
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo guardar la entidad', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setEditingEntity(null);
   };
 
   const handleDeleteEntity = (entity: Entity) => {
@@ -109,25 +134,33 @@ export function SettingsPage() {
       open: true,
       itemName: entity.name,
       itemType: 'entidad',
-      onConfirm: () => {
-        setEntities(prev => prev.filter(e => e.id !== entity.id));
-        toast({ title: 'Entidad eliminada', description: `"${entity.name}" se ha eliminado.` });
+      onConfirm: async () => {
+        try {
+          await deleteEntity(entity.id);
+          toast({ title: 'Entidad eliminada', description: `"${entity.name}" se ha eliminado.` });
+        } catch (error) {
+          toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+        }
         setDeleteDialog(prev => ({ ...prev, open: false }));
       }
     });
   };
 
   // Source handlers
-  const handleSaveSource = (sourceData: Omit<Source, 'id'> & { id?: string }) => {
-    if (sourceData.id) {
-      setSources(prev => prev.map(s => s.id === sourceData.id ? { ...sourceData, id: sourceData.id } as Source : s));
-      toast({ title: 'Fuente actualizada', description: `"${sourceData.name}" se ha actualizado correctamente.` });
-    } else {
-      const newSource: Source = { ...sourceData, id: crypto.randomUUID() };
-      setSources(prev => [...prev, newSource]);
-      toast({ title: 'Fuente añadida', description: `"${sourceData.name}" se ha añadido correctamente.` });
+  const handleSaveSource = async (sourceData: Omit<Source, 'id'> & { id?: string }) => {
+    setSaving(true);
+    try {
+      await saveSource(sourceData);
+      toast({ 
+        title: sourceData.id ? 'Fuente actualizada' : 'Fuente añadida', 
+        description: `"${sourceData.name}" se ha ${sourceData.id ? 'actualizado' : 'añadido'} correctamente.` 
+      });
+      setEditingSource(null);
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo guardar la fuente', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setEditingSource(null);
   };
 
   const handleDeleteSource = (source: Source) => {
@@ -135,25 +168,33 @@ export function SettingsPage() {
       open: true,
       itemName: source.name,
       itemType: 'fuente',
-      onConfirm: () => {
-        setSources(prev => prev.filter(s => s.id !== source.id));
-        toast({ title: 'Fuente eliminada', description: `"${source.name}" se ha eliminado.` });
+      onConfirm: async () => {
+        try {
+          await deleteSource(source.id);
+          toast({ title: 'Fuente eliminada', description: `"${source.name}" se ha eliminado.` });
+        } catch (error) {
+          toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+        }
         setDeleteDialog(prev => ({ ...prev, open: false }));
       }
     });
   };
 
   // Keyword handlers
-  const handleSaveKeyword = (keywordData: Omit<Keyword, 'id'> & { id?: string }) => {
-    if (keywordData.id) {
-      setKeywords(prev => prev.map(k => k.id === keywordData.id ? { ...keywordData, id: keywordData.id } as Keyword : k));
-      toast({ title: 'Keyword actualizada', description: `"${keywordData.term}" se ha actualizado correctamente.` });
-    } else {
-      const newKeyword: Keyword = { ...keywordData, id: crypto.randomUUID() };
-      setKeywords(prev => [...prev, newKeyword]);
-      toast({ title: 'Keyword añadida', description: `"${keywordData.term}" se ha añadido correctamente.` });
+  const handleSaveKeyword = async (keywordData: Omit<Keyword, 'id'> & { id?: string }) => {
+    setSaving(true);
+    try {
+      await saveKeyword(keywordData);
+      toast({ 
+        title: keywordData.id ? 'Keyword actualizada' : 'Keyword añadida', 
+        description: `"${keywordData.term}" se ha ${keywordData.id ? 'actualizado' : 'añadido'} correctamente.` 
+      });
+      setEditingKeyword(null);
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo guardar la keyword', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    setEditingKeyword(null);
   };
 
   const handleDeleteKeyword = (keyword: Keyword) => {
@@ -161,19 +202,41 @@ export function SettingsPage() {
       open: true,
       itemName: keyword.term,
       itemType: 'keyword',
-      onConfirm: () => {
-        setKeywords(prev => prev.filter(k => k.id !== keyword.id));
-        toast({ title: 'Keyword eliminada', description: `"${keyword.term}" se ha eliminado.` });
+      onConfirm: async () => {
+        try {
+          await deleteKeyword(keyword.id);
+          toast({ title: 'Keyword eliminada', description: `"${keyword.term}" se ha eliminado.` });
+        } catch (error) {
+          toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+        }
         setDeleteDialog(prev => ({ ...prev, open: false }));
       }
     });
   };
+
+  const TableSkeleton = () => (
+    <div className="space-y-3">
+      {[1,2,3].map(i => (
+        <div key={i} className="flex gap-4">
+          <Skeleton className="h-8 flex-1" />
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-20" />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <MainLayout>
       <PageHeader 
         title="Configuración"
         subtitle="Gestiona los parámetros del newsroom"
+        actions={
+          <Button variant="outline" onClick={reload} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+        }
       />
       
       <div className="p-6">
@@ -221,49 +284,57 @@ export function SettingsPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Prioridad</TableHead>
-                      <TableHead className="w-[100px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topics.map(topic => (
-                      <TableRow key={topic.id}>
-                        <TableCell className="font-medium">{topic.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{topic.description}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">P{topic.priority}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => {
-                                setEditingTopic(topic);
-                                setTopicDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-destructive"
-                              onClick={() => handleDeleteTopic(topic)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                {loading ? <TableSkeleton /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Descripción</TableHead>
+                        <TableHead>Prioridad</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {topics.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                            No hay topics configurados. Añade el primero.
+                          </TableCell>
+                        </TableRow>
+                      ) : topics.map(topic => (
+                        <TableRow key={topic.id}>
+                          <TableCell className="font-medium">{topic.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{topic.description}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">P{topic.priority}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setEditingTopic(topic);
+                                  setTopicDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-destructive"
+                                onClick={() => handleDeleteTopic(topic)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -288,51 +359,59 @@ export function SettingsPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Aliases</TableHead>
-                      <TableHead className="w-[100px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {entities.map(entity => (
-                      <TableRow key={entity.id}>
-                        <TableCell className="font-medium">{entity.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{entity.type}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {entity.aliases.join(', ')}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => {
-                                setEditingEntity(entity);
-                                setEntityDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-destructive"
-                              onClick={() => handleDeleteEntity(entity)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                {loading ? <TableSkeleton /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Aliases</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {entities.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                            No hay entidades configuradas. Añade la primera.
+                          </TableCell>
+                        </TableRow>
+                      ) : entities.map(entity => (
+                        <TableRow key={entity.id}>
+                          <TableCell className="font-medium">{entity.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{entity.type}</Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {entity.aliases.join(', ')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setEditingEntity(entity);
+                                  setEntityDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-destructive"
+                                onClick={() => handleDeleteEntity(entity)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -357,61 +436,69 @@ export function SettingsPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>URL</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Fiabilidad</TableHead>
-                      <TableHead className="w-[100px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sources.map(source => (
-                      <TableRow key={source.id}>
-                        <TableCell className="font-medium">{source.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{source.url}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{source.category}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-success rounded-full" 
-                                style={{ width: `${source.reliability}%` }}
-                              />
-                            </div>
-                            <span className="text-sm text-muted-foreground">{source.reliability}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => {
-                                setEditingSource(source);
-                                setSourceDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-destructive"
-                              onClick={() => handleDeleteSource(source)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                {loading ? <TableSkeleton /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>URL</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead>Fiabilidad</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {sources.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            No hay fuentes configuradas. Añade la primera.
+                          </TableCell>
+                        </TableRow>
+                      ) : sources.map(source => (
+                        <TableRow key={source.id}>
+                          <TableCell className="font-medium">{source.name}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{source.url}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{source.category}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-success rounded-full" 
+                                  style={{ width: `${source.reliability}%` }}
+                                />
+                              </div>
+                              <span className="text-sm text-muted-foreground">{source.reliability}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setEditingSource(source);
+                                  setSourceDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-destructive"
+                                onClick={() => handleDeleteSource(source)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -436,160 +523,126 @@ export function SettingsPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Impact Keywords */}
-                  <div>
-                    <h4 className="font-medium mb-3 flex items-center gap-2 text-success">
-                      <Badge className="bg-success/10 text-success border-success/20">+</Badge>
-                      Keywords de Impacto
-                    </h4>
-                    <div className="space-y-2">
-                      {keywords.filter(k => k.type === 'impact').map(keyword => (
-                        <div 
-                          key={keyword.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-success/5 border border-success/10"
-                        >
-                          <span className="font-medium">{keyword.term}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-success">+{keyword.weight}</Badge>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8"
-                              onClick={() => {
-                                setEditingKeyword(keyword);
-                                setKeywordDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => handleDeleteKeyword(keyword)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
+                {loading ? <TableSkeleton /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Término</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Peso</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {keywords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                            No hay keywords configuradas. Añade la primera.
+                          </TableCell>
+                        </TableRow>
+                      ) : keywords.map(keyword => (
+                        <TableRow key={keyword.id}>
+                          <TableCell className="font-medium">{keyword.term}</TableCell>
+                          <TableCell>
+                            <Badge variant={keyword.type === 'impact' ? 'default' : 'destructive'}>
+                              {keyword.type === 'impact' ? 'Impacto' : 'Negativo'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className={keyword.weight > 0 ? 'text-success' : 'text-destructive'}>
+                              {keyword.weight > 0 ? '+' : ''}{keyword.weight}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setEditingKeyword(keyword);
+                                  setKeywordDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-destructive"
+                                onClick={() => handleDeleteKeyword(keyword)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </div>
-                  </div>
-                  
-                  {/* Negative Keywords */}
-                  <div>
-                    <h4 className="font-medium mb-3 flex items-center gap-2 text-destructive">
-                      <Badge className="bg-destructive/10 text-destructive border-destructive/20">-</Badge>
-                      Keywords Negativas
-                    </h4>
-                    <div className="space-y-2">
-                      {keywords.filter(k => k.type === 'negative').map(keyword => (
-                        <div 
-                          key={keyword.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-destructive/5 border border-destructive/10"
-                        >
-                          <span className="font-medium">{keyword.term}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-destructive">{keyword.weight}</Badge>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8"
-                              onClick={() => {
-                                setEditingKeyword(keyword);
-                                setKeywordDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => handleDeleteKeyword(keyword)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Scoring Tab */}
           <TabsContent value="scoring">
-            <Card className="shadow-soft">
-              <CardHeader>
-                <CardTitle className="text-base">Reglas de Scoring</CardTitle>
-                <CardDescription>Configura cómo se calcula la relevancia de las noticias</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Priorizar fuentes de alta fiabilidad</Label>
-                        <p className="text-sm text-muted-foreground">+15 puntos para fuentes con &gt;85% fiabilidad</p>
-                      </div>
-                      <Switch defaultChecked />
+            <div className="grid gap-6">
+              <Card className="shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-base">Configuración de Scoring</CardTitle>
+                  <CardDescription>Ajusta cómo se calculan las puntuaciones de las noticias</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Puntuación base</Label>
+                      <p className="text-sm text-muted-foreground">Todas las noticias empiezan con 50 puntos</p>
                     </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Boost por topics prioritarios</Label>
-                        <p className="text-sm text-muted-foreground">+20 puntos para topics P1</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Penalizar contenido antiguo</Label>
-                        <p className="text-sm text-muted-foreground">-5 puntos por cada día de antigüedad</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
+                    <Badge variant="secondary">50 pts</Badge>
                   </div>
                   
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Detectar entidades monitoreadas</Label>
-                        <p className="text-sm text-muted-foreground">+10 puntos por entidad detectada</p>
-                      </div>
-                      <Switch defaultChecked />
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Bonus por fuente fiable</Label>
+                      <p className="text-sm text-muted-foreground">+15 puntos si la fuente tiene &gt;85% fiabilidad</p>
                     </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Filtrar duplicados automáticamente</Label>
-                        <p className="text-sm text-muted-foreground">Descartar noticias con &gt;80% similitud</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Alertas de alta prioridad</Label>
-                        <p className="text-sm text-muted-foreground">Notificar noticias con score &gt;90</p>
-                      </div>
-                      <Switch />
-                    </div>
+                    <Switch defaultChecked />
                   </div>
-                </div>
-                
-                <div className="pt-4 border-t border-border">
-                  <Button onClick={() => toast({ title: 'Configuración guardada' })}>
-                    Guardar Configuración
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Multiplicador de prioridad de topic</Label>
+                      <p className="text-sm text-muted-foreground">Topics P1 suman más puntos que P5</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Penalización por keywords negativas</Label>
+                      <p className="text-sm text-muted-foreground">Resta puntos cuando detecta términos negativos</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-base">Fórmula de Scoring</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted/50 p-4 rounded-lg font-mono text-sm">
+                    <p className="text-muted-foreground mb-2">// Cálculo automático</p>
+                    <p>score = 50 <span className="text-muted-foreground">// base</span></p>
+                    <p className="mt-1">+ Σ(keyword.weight) <span className="text-muted-foreground">// keywords detectadas</span></p>
+                    <p className="mt-1">+ Σ((5 - topic.priority) * 5) <span className="text-muted-foreground">// bonus por topic</span></p>
+                    <p className="mt-1">+ (source.reliability &gt; 85 ? 15 : 0) <span className="text-muted-foreground">// bonus fuente</span></p>
+                    <p className="mt-3 text-muted-foreground">// Resultado entre 0-100</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
