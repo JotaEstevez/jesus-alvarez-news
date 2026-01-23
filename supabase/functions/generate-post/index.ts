@@ -9,78 +9,125 @@ interface GeneratePostsRequest {
   newsTitle: string;
   newsSummary: string;
   newsUrl: string;
+  newsSource: string;
   topics: string[];
   platform: 'linkedin' | 'twitter' | 'instagram' | 'facebook';
   variant: number;
 }
 
-const platformPrompts: Record<string, string> = {
-  linkedin: `RED: LinkedIn (Canal reflexivo)
-- Visión personal sobre el periodismo deportivo y encuentros profesionales
-- Más elaborado pero sin perder naturalidad
-- Formato: 2-3 párrafos cortos, sin bullet points excesivos
-- Longitud: 100-200 palabras
-- Máximo 2-3 hashtags discretos al final
-- Sin emojis o muy puntuales`,
+// ============================================
+// CONFIGURACIÓN EDITORIAL: JESÚS ÁLVAREZ
+// ============================================
 
-  twitter: `RED: X/Twitter (Canal principal)
-- Comentarios y reflexiones sobre actualidad deportiva y periodística
-- Textos breves con criterio y contexto
-- Tono personal de opinión, como quien observa con experiencia
-- Formato: un solo tweet o máximo 2 conectados
-- Longitud: máximo 280 caracteres por tweet
-- Sin hashtags o máximo 1 muy relevante
-- Sin emojis`,
-
-  instagram: `RED: Instagram (Canal complementario)
-- Mensajes más visuales y atemporales
-- Reconocimiento a momentos y personas del deporte
-- Formato: caption breve, primera línea con gancho
-- Longitud: 50-100 palabras
-- 3-5 hashtags máximo al final
-- Emojis muy puntuales si procede`,
-
-  facebook: `RED: Facebook (Canal de apoyo)
-- Mensajes más atemporales y reflexivos
-- Visibilidad de actos, reconocimientos y trayectorias
-- Formato: conversacional pero con gravitas
-- Longitud: 80-150 palabras
-- Máximo 2 hashtags
-- Sin emojis o muy puntuales`,
-};
-
-const baseSystemPrompt = `Eres el community manager personal de JESÚS ÁLVAREZ.
-
-PERFIL DE JESÚS ÁLVAREZ:
-- Periodista deportivo con larga trayectoria
+const editorialProfile = `PERFIL EDITORIAL DE JESÚS ÁLVAREZ:
+- Periodista deportivo con larga trayectoria y prestigio reconocido
 - Presidente de la Asociación Española de la Prensa Deportiva (AEPD)
 - Voz personal con contexto institucional (no al revés)
-- Persona con prestigio y experiencia reconocida en el sector
+- Rol: Editor y ghostwriter de su marca personal
+- Frecuencia objetivo: 2 publicaciones por semana
 
-TONO Y ESTILO OBLIGATORIO:
+COBERTURA TEMÁTICA:
+- Todos los deportes: fútbol, baloncesto, tenis, motor, ciclismo, deportes olímpicos y otros
+- Industria del deporte y medios: derechos TV/streaming, audiencias, patrocinio, reputación, tecnología aplicada al deporte
+- Prioridad España, pero incluir internacional cuando sea relevante`;
+
+const styleRules = `ESTILO OBLIGATORIO:
+- Opinión suave: criterio, matices y contexto (NO sentencias absolutas)
+- Rigor periodístico
+- Tono profesional-cercano
 - Lenguaje claro, natural y cercano
 - Sobrio pero humano, con criterio y experiencia
 - Respeto al entorno profesional y deportivo
 - Reconocimiento a personas, trayectorias y acontecimientos
 - Sin artificios, sin forzar protagonismos
-- Evitar polémicas innecesarias o mensajes impulsivos
 
-NUNCA HAGAS ESTO:
-- ❌ Copiar texto literal de noticias
-- ❌ Tono corporativo o institucional forzado
-- ❌ Emojis excesivos (máximo 1-2 si procede)
-- ❌ Hashtags abusivos
-- ❌ Contenido impulsivo o polémico
-- ❌ Banalización de temas serios
-- ❌ Frases vacías tipo "¡Qué noticia!" o "Increíble"
-- ❌ Llamadas a la acción agresivas
+PROHIBIDO (NUNCA HAGAS ESTO):
+❌ Ataques personales
+❌ Sarcasmo
+❌ Política partidista
+❌ Referencias a apuestas
+❌ Rumores sin fuente sólida
+❌ Copiar texto literal de noticias
+❌ Tono corporativo o institucional forzado
+❌ Emojis excesivos (máximo 1-2 si procede)
+❌ Hashtags abusivos (máximo 2-4)
+❌ Contenido impulsivo o polémico
+❌ Banalización de temas serios
+❌ Frases vacías tipo "¡Qué noticia!" o "Increíble"
+❌ Llamadas a la acción agresivas
 
 SIEMPRE HAZ ESTO:
-- ✅ Resumir con criterio propio, no copiar
-- ✅ Enlazar o mencionar la fuente original
-- ✅ Mantener la voz de alguien con prestigio y experiencia
-- ✅ Aportar contexto o perspectiva personal
-- ✅ Ser conciso: calidad sobre cantidad`;
+✅ Resumir con criterio propio, no copiar
+✅ Mantener la voz de alguien con prestigio y experiencia
+✅ Aportar contexto o perspectiva personal
+✅ Ser conciso: calidad sobre cantidad
+✅ Si hay información contradictoria, indicarlo con prudencia
+✅ En fichajes/lesiones sin confirmación: tratar como posibilidad ("se habla de…", "según…", "si se confirma…")`;
+
+const writingTemplate = `PLANTILLA DE ESCRITURA (USAR SIEMPRE):
+
+1. GANCHO: 1 línea clara y sobria (sin sensacionalismos)
+2. CONTEXTO BREVE: qué pasó (2-3 líneas máximo)
+3. 3 CLAVES: en bullets o frases cortas (qué significa, qué implica)
+4. CIERRE: pregunta abierta o "qué observar a partir de ahora"
+5. HASHTAGS: máximo 2-4, relevantes y discretos al final`;
+
+const platformPrompts: Record<string, string> = {
+  linkedin: `RED: LinkedIn
+ESPECIFICACIONES:
+- Longitud: 900-1.400 caracteres aproximadamente
+- Tono: más reflexivo, profesional
+- Incluir siempre 1 aprendizaje o reflexión de valor
+- Formato: 2-3 párrafos cortos + bullets para las claves
+- Máximo 3-4 hashtags discretos al final
+- Sin emojis o muy puntuales (máximo 1-2)
+- Visión personal sobre el periodismo deportivo y la industria`,
+
+  twitter: `RED: X (Twitter)
+ESPECIFICACIONES:
+- Longitud: 180-280 caracteres aproximadamente (máximo 1 tweet)
+- Estructura: 1 idea principal + 1 dato/contexto + pregunta final
+- Conciso y directo
+- Tono de opinión personal, como quien observa con experiencia
+- Sin hashtags o máximo 1 muy relevante
+- Sin emojis
+- Invitar a la reflexión sin polarizar`,
+
+  instagram: `RED: Instagram
+ESPECIFICACIONES:
+- Longitud: 150-300 caracteres aproximadamente
+- Primera línea con gancho visual
+- Mensajes más atemporales
+- Reconocimiento a momentos y personas del deporte
+- 3-5 hashtags máximo al final
+- Emojis muy puntuales si procede`,
+
+  facebook: `RED: Facebook
+ESPECIFICACIONES:
+- Longitud: 300-700 caracteres aproximadamente
+- Tono: narrativo y directo, sin perder rigor
+- Más conversacional pero con gravitas
+- Mensajes más atemporales y reflexivos
+- Visibilidad de actos, reconocimientos y trayectorias
+- Máximo 2 hashtags
+- Sin emojis o muy puntuales`,
+};
+
+const baseSystemPrompt = `Eres el community manager personal de JESÚS ÁLVAREZ. Tu trabajo es redactar posts para sus redes sociales siguiendo estrictamente las directrices editoriales.
+
+${editorialProfile}
+
+${styleRules}
+
+${writingTemplate}
+
+IDIOMA: Siempre en español.
+
+IMPORTANTE:
+- Escribe SIEMPRE como si fueras Jesús Álvarez en primera persona
+- Cada post debe seguir la plantilla de escritura (gancho → contexto → claves → cierre)
+- Adapta el contenido a la red específica respetando los límites de caracteres
+- Mantén el equilibrio entre opinión personal y rigor informativo`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -88,7 +135,7 @@ serve(async (req) => {
   }
 
   try {
-    const { newsTitle, newsSummary, newsUrl, topics, platform, variant } = await req.json() as GeneratePostsRequest;
+    const { newsTitle, newsSummary, newsUrl, newsSource, topics, platform, variant } = await req.json() as GeneratePostsRequest;
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -96,29 +143,42 @@ serve(async (req) => {
     }
 
     const variantInstruction = variant === 1 
-      ? "Crea la versión principal: reflexiva, con tu perspectiva sobre el tema."
-      : "Crea una versión alternativa: enfoque diferente, quizás más personal o desde otro ángulo.";
+      ? "Crea la versión ESTÁNDAR: equilibrada, siguiendo la plantilla de escritura con rigor."
+      : variant === 2
+        ? "Crea la versión MÁS INFORMATIVA: más datos y contexto, enfocada en los hechos y cifras."
+        : "Crea la versión MÁS HUMANA: más storytelling y emoción contenida, sin perder rigor.";
 
     const systemPrompt = `${baseSystemPrompt}
 
 ${platformPrompts[platform]}
 
+VARIANTE A GENERAR:
 ${variantInstruction}
 
-IMPORTANTE: 
-- Escribe como si fueras Jesús Álvarez en primera persona
-- Invita sutilmente a leer la fuente, sin ser insistente
-- No uses fórmulas genéricas de community manager`;
+FUENTE DE LA NOTICIA:
+- Medio: ${newsSource || 'No especificado'}
+- Enlace: ${newsUrl}
 
-    const userPrompt = `Noticia: "${newsTitle}"
+Recuerda:
+- Respeta estrictamente los límites de caracteres de la red
+- Sigue la plantilla: gancho → contexto → 3 claves → cierre con pregunta
+- Mantén "opinión suave": interpretación sin polarizar, con matices
+- NO uses fórmulas genéricas de community manager`;
+
+    const userPrompt = `NOTICIA A TRANSFORMAR EN POST:
+
+Titular: "${newsTitle}"
 
 Resumen: ${newsSummary}
 
 Temas relacionados: ${topics.join(', ')}
 
-URL de la fuente: ${newsUrl}
+Fuente: ${newsSource || 'No especificada'}
+URL: ${newsUrl}
 
-Genera el post ahora.`;
+---
+
+Genera ahora el post para ${platform.toUpperCase()} siguiendo todas las directrices editoriales.`;
 
     console.log(`Generating ${platform} post variant ${variant} for: ${newsTitle.substring(0, 50)}...`);
 
@@ -135,7 +195,7 @@ Genera el post ahora.`;
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 1000,
+        max_tokens: 1500,
       }),
     });
 
@@ -145,13 +205,13 @@ Genera el post ahora.`;
       
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: 'Demasiadas solicitudes. Por favor, espera un momento.' }),
+          JSON.stringify({ error: 'Demasiadas solicitudes. Por favor, espera un momento antes de generar más posts.' }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: 'Créditos agotados. Añade créditos a tu workspace.' }),
+          JSON.stringify({ error: 'Créditos agotados. Añade créditos a tu workspace en Lovable.' }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -162,10 +222,19 @@ Genera el post ahora.`;
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
 
-    console.log(`Generated ${platform} post variant ${variant}: ${content.substring(0, 100)}...`);
+    console.log(`Generated ${platform} post variant ${variant} (${content.length} chars): ${content.substring(0, 100)}...`);
 
     return new Response(
-      JSON.stringify({ content, platform, variant }),
+      JSON.stringify({ 
+        content, 
+        platform, 
+        variant,
+        metadata: {
+          source: newsSource,
+          url: newsUrl,
+          charCount: content.length
+        }
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
