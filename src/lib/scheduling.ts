@@ -225,13 +225,23 @@ export function formatScheduleTime(date: Date): string {
 }
 
 /**
- * Límites de caracteres por plataforma
+ * Límites de caracteres por plataforma (ACTUALIZADOS según reglas editoriales)
  */
 export const characterLimits: Record<Platform, { min: number; max: number; label: string }> = {
-  linkedin: { min: 900, max: 1400, label: '900-1.400 caracteres' },
-  twitter: { min: 180, max: 280, label: '180-280 caracteres' },
+  linkedin: { min: 800, max: 1400, label: '800-1.400 caracteres' },
+  twitter: { min: 120, max: 280, label: '120-280 caracteres' },
   instagram: { min: 150, max: 300, label: '150-300 caracteres' },
-  facebook: { min: 300, max: 700, label: '300-700 caracteres' },
+  facebook: { min: 250, max: 600, label: '250-600 caracteres' },
+};
+
+/**
+ * Límites de hashtags por plataforma
+ */
+export const hashtagLimits: Record<Platform, { min: number; max: number }> = {
+  linkedin: { min: 2, max: 4 },
+  twitter: { min: 0, max: 2 },
+  instagram: { min: 0, max: 5 },
+  facebook: { min: 0, max: 2 },
 };
 
 /**

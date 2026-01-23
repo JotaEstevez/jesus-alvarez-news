@@ -39,7 +39,10 @@ import {
   Star,
   Calendar,
   Clock,
-  MessageSquare
+  MessageSquare,
+  AlertTriangle,
+  CheckCircle,
+  Hash
 } from 'lucide-react';
 
 const platforms: Platform[] = ['linkedin', 'twitter', 'facebook'];
@@ -76,6 +79,15 @@ export function GeneratorPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<Record<string, string>>({});
   const [showSchedule, setShowSchedule] = useState(false);
+  const [validationInfo, setValidationInfo] = useState<Record<string, { 
+    isValid: boolean; 
+    errors: string[]; 
+    warnings: string[];
+    charCount: number;
+    hashtagCount: number;
+    attemptsNeeded: number;
+  }>>({});
+  const [newsNotSuitable, setNewsNotSuitable] = useState<{ reason: string; suggestion: string } | null>(null);
 
   // Get drafts for this news item
   const drafts = newsId ? getDraftsForNews(newsId) : [];
@@ -86,7 +98,7 @@ export function GeneratorPage() {
     return generateScheduleSuggestions(newsItem.title, platforms);
   }, [newsItem]);
 
-  const generateSinglePost = async (platform: Platform, variant: number): Promise<string | null> => {
+  const generateSinglePost = async (platform: Platform, variant: number): Promise<{ content: string; metadata: any } | null> => {
     if (!newsItem) return null;
     
     try {
@@ -104,10 +116,29 @@ export function GeneratorPage() {
 
       if (error) {
         console.error('Error generating post:', error);
+        
+        // Verificar si es error de noticia no apta
+        if (error.message?.includes('422') || error.message?.includes('no apta')) {
+          setNewsNotSuitable({
+            reason: 'La noticia parece ser un rumor sin fuente fiable.',
+            suggestion: 'Busca una noticia con confirmación oficial o fuente verificable.'
+          });
+          return null;
+        }
+        
         throw error;
       }
 
-      return data.content;
+      // Manejar respuesta de noticia no apta
+      if (data?.isNotSuitable) {
+        setNewsNotSuitable({
+          reason: data.reason || 'Noticia no apta para publicación',
+          suggestion: data.suggestion || 'Busca una noticia con fuente fiable.'
+        });
+        return null;
+      }
+
+      return { content: data.content, metadata: data.metadata };
     } catch (error: any) {
       console.error('Generate post error:', error);
       
@@ -142,20 +173,35 @@ export function GeneratorPage() {
         const key = `${platform}-${variant}`;
         setGeneratingPlatforms(prev => new Set(prev).add(key));
         
-        const content = await generateSinglePost(platform, variant);
+        const result = await generateSinglePost(platform, variant);
         
-        if (content) {
-          setLocalContent(prev => ({ ...prev, [key]: content }));
+        if (result) {
+          setLocalContent(prev => ({ ...prev, [key]: result.content }));
+          
+          // Guardar info de validación
+          if (result.metadata) {
+            setValidationInfo(prev => ({
+              ...prev,
+              [key]: {
+                isValid: result.metadata.isValid ?? true,
+                errors: result.metadata.errors ?? [],
+                warnings: result.metadata.warnings ?? [],
+                charCount: result.metadata.charCount ?? result.content.length,
+                hashtagCount: result.metadata.hashtagCount ?? 0,
+                attemptsNeeded: result.metadata.attemptsNeeded ?? 1,
+              }
+            }));
+          }
           
           const existingDraft = drafts.find(d => d.platform === platform && d.variant === variant);
           if (existingDraft) {
-            updateDraft(existingDraft.id, { content });
+            updateDraft(existingDraft.id, { content: result.content });
           } else {
             addDraft({
               newsItemId: newsId,
               platform,
               variant,
-              content,
+              content: result.content,
               status: 'pending',
             });
           }
@@ -184,20 +230,35 @@ export function GeneratorPage() {
     const key = `${platform}-${variant}`;
     setGeneratingPlatforms(prev => new Set(prev).add(key));
     
-    const content = await generateSinglePost(platform, variant);
+    const result = await generateSinglePost(platform, variant);
     
-    if (content) {
-      setLocalContent(prev => ({ ...prev, [key]: content }));
+    if (result) {
+      setLocalContent(prev => ({ ...prev, [key]: result.content }));
+      
+      // Guardar info de validación
+      if (result.metadata) {
+        setValidationInfo(prev => ({
+          ...prev,
+          [key]: {
+            isValid: result.metadata.isValid ?? true,
+            errors: result.metadata.errors ?? [],
+            warnings: result.metadata.warnings ?? [],
+            charCount: result.metadata.charCount ?? result.content.length,
+            hashtagCount: result.metadata.hashtagCount ?? 0,
+            attemptsNeeded: result.metadata.attemptsNeeded ?? 1,
+          }
+        }));
+      }
       
       const existingDraft = drafts.find(d => d.platform === platform && d.variant === variant);
       if (existingDraft) {
-        updateDraft(existingDraft.id, { content });
+        updateDraft(existingDraft.id, { content: result.content });
       } else {
         addDraft({
           newsItemId: newsId,
           platform,
           variant,
-          content,
+          content: result.content,
           status: 'pending',
         });
       }
@@ -371,6 +432,28 @@ export function GeneratorPage() {
       />
       
       <div className="p-6 space-y-6">
+        {/* Alerta de noticia no apta */}
+        {newsNotSuitable && (
+          <Card className="border-destructive/50 bg-destructive/10">
+            <CardContent className="p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              <div>
+                <p className="font-semibold text-destructive">Noticia No Apta</p>
+                <p className="text-sm text-muted-foreground">{newsNotSuitable.reason}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <strong>Sugerencia:</strong> {newsNotSuitable.suggestion}
+                </p>
+                <Link to="/inbox">
+                  <Button variant="outline" size="sm" className="mt-3 gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Buscar otra noticia
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Calendario de Publicación Sugerido */}
         {(showSchedule || drafts.length > 0) && (
           <Card className="border-accent/20 bg-accent/5">
@@ -472,6 +555,7 @@ export function GeneratorPage() {
                   const content = getDraftContent(platform, variantDef.variant);
                   const variantInfo = getVariantInfo(variantDef.variant, platform);
                   const charEval = evaluateCharacterCount(content, platform);
+                  const vInfo = validationInfo[key];
                   
                   return (
                     <AccordionItem 
@@ -495,7 +579,33 @@ export function GeneratorPage() {
                               Recomendada
                             </Badge>
                           )}
-                          {content && (
+                          {content && vInfo && (
+                            <div className="flex items-center gap-2 mr-4">
+                              <Badge 
+                                variant="outline" 
+                                className={`${
+                                  vInfo.isValid 
+                                    ? 'text-green-600 border-green-300' 
+                                    : 'text-orange-600 border-orange-300'
+                                }`}
+                              >
+                                {vInfo.charCount} chars
+                              </Badge>
+                              <Badge variant="outline" className="gap-1">
+                                <Hash className="h-3 w-3" />
+                                {vInfo.hashtagCount}
+                              </Badge>
+                              {vInfo.isValid && (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              )}
+                              {vInfo.attemptsNeeded > 1 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {vInfo.attemptsNeeded} intentos
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                          {content && !vInfo && (
                             <Badge 
                               variant="outline" 
                               className={`mr-4 ${
