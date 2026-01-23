@@ -30,6 +30,16 @@ export const mockSources: Source[] = [
   { id: '4', name: 'Olympics.com', url: 'https://olympics.com', reliability: 95, category: 'Deportes' },
   { id: '5', name: 'RTVE', url: 'https://rtve.es', reliability: 90, category: 'Nacional' },
   { id: '6', name: 'MARCA', url: 'https://marca.com', reliability: 85, category: 'Deportes' },
+  { id: '7', name: 'AS', url: 'https://as.com', reliability: 85, category: 'Deportes' },
+  { id: '8', name: 'Mundo Deportivo', url: 'https://mundodeportivo.com', reliability: 85, category: 'Deportes' },
+  { id: '9', name: 'Sport', url: 'https://sport.es', reliability: 80, category: 'Deportes' },
+  { id: '10', name: 'Relevo', url: 'https://relevo.com', reliability: 90, category: 'Deportes' },
+  { id: '11', name: 'The Athletic', url: 'https://theathletic.com', reliability: 95, category: 'Internacional' },
+  { id: '12', name: 'ESPN', url: 'https://espn.com', reliability: 90, category: 'Internacional' },
+  { id: '13', name: 'UEFA', url: 'https://uefa.com', reliability: 100, category: 'Oficial' },
+  { id: '14', name: 'LaLiga', url: 'https://laliga.com', reliability: 100, category: 'Oficial' },
+  { id: '15', name: 'RFEF', url: 'https://rfef.es', reliability: 100, category: 'Oficial' },
+  { id: '16', name: 'ACB', url: 'https://acb.com', reliability: 100, category: 'Oficial' },
 ];
 
 export const mockKeywords: Keyword[] = [
