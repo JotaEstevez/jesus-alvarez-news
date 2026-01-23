@@ -1,16 +1,29 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PlatformBadge } from '@/components/ui/platform-badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useNewsroom } from '@/context/NewsroomContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Platform } from '@/types/newsroom';
+import { 
+  generateScheduleSuggestions, 
+  getVariantInfo, 
+  getRecommendedVariant,
+  evaluateCharacterCount,
+  variantDefinitions,
+  ScheduleSlot
+} from '@/lib/scheduling';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { 
   ArrowLeft,
   Sparkles,
@@ -22,10 +35,14 @@ import {
   Twitter,
   Instagram,
   Facebook,
-  Loader2
+  Loader2,
+  Star,
+  Calendar,
+  Clock,
+  MessageSquare
 } from 'lucide-react';
 
-const platforms: Platform[] = ['linkedin', 'twitter', 'instagram', 'facebook'];
+const platforms: Platform[] = ['linkedin', 'twitter', 'facebook'];
 
 const platformIcons = {
   linkedin: Linkedin,
@@ -38,7 +55,16 @@ export function GeneratorPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { newsId } = useParams<{ newsId: string }>();
-  const { getNewsById, getDraftsForNews, updateDraft, updateDraftStatus, getReadyNews, addDraft } = useNewsroom();
+  const { 
+    getNewsById, 
+    getDraftsForNews, 
+    updateDraft, 
+    updateDraftStatus, 
+    getReadyNews, 
+    addDraft,
+    scheduleDraft,
+    addCalendarEvent
+  } = useNewsroom();
   
   const newsItem = newsId ? getNewsById(newsId) : null;
   const readyNews = getReadyNews();
@@ -49,9 +75,16 @@ export function GeneratorPage() {
   const [generatingPlatforms, setGeneratingPlatforms] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<Record<string, string>>({});
+  const [showSchedule, setShowSchedule] = useState(false);
 
   // Get drafts for this news item
   const drafts = newsId ? getDraftsForNews(newsId) : [];
+
+  // Generate schedule suggestions
+  const scheduleSuggestions = useMemo(() => {
+    if (!newsItem) return [];
+    return generateScheduleSuggestions(newsItem.title, platforms);
+  }, [newsItem]);
 
   const generateSinglePost = async (platform: Platform, variant: number): Promise<string | null> => {
     if (!newsItem) return null;
@@ -62,6 +95,7 @@ export function GeneratorPage() {
           newsTitle: newsItem.title,
           newsSummary: newsItem.summary,
           newsUrl: newsItem.url,
+          newsSource: newsItem.source,
           topics: newsItem.topics,
           platform,
           variant,
@@ -77,7 +111,6 @@ export function GeneratorPage() {
     } catch (error: any) {
       console.error('Generate post error:', error);
       
-      // Handle rate limit errors
       if (error.message?.includes('429') || error.message?.includes('Demasiadas')) {
         toast({
           title: 'Límite de solicitudes',
@@ -100,12 +133,12 @@ export function GeneratorPage() {
     if (!newsId || !newsItem) return;
     
     setIsGenerating(true);
-    toast({ title: 'Generando posts...', description: 'Esto puede tardar unos segundos.' });
+    toast({ title: 'Generando posts...', description: 'Creando 3 variantes por red (9 posts totales).' });
     
     let successCount = 0;
     
     for (const platform of platforms) {
-      for (const variant of [1, 2]) {
+      for (const variant of [1, 2, 3]) {
         const key = `${platform}-${variant}`;
         setGeneratingPlatforms(prev => new Set(prev).add(key));
         
@@ -114,7 +147,6 @@ export function GeneratorPage() {
         if (content) {
           setLocalContent(prev => ({ ...prev, [key]: content }));
           
-          // Check if draft exists, update or create
           const existingDraft = drafts.find(d => d.platform === platform && d.variant === variant);
           if (existingDraft) {
             updateDraft(existingDraft.id, { content });
@@ -139,9 +171,10 @@ export function GeneratorPage() {
     }
     
     setIsGenerating(false);
+    setShowSchedule(true);
     toast({ 
       title: 'Posts generados', 
-      description: `${successCount} borradores creados con IA.` 
+      description: `${successCount} borradores creados con IA. Revisa el calendario sugerido.` 
     });
   };
 
@@ -205,13 +238,39 @@ export function GeneratorPage() {
     }
   };
 
+  const handleScheduleRecommended = () => {
+    if (!newsId) return;
+    
+    scheduleSuggestions.forEach((slot) => {
+      const recommendedVariant = getRecommendedVariant(slot.platform);
+      const draft = drafts.find(d => d.platform === slot.platform && d.variant === recommendedVariant);
+      
+      if (draft) {
+        scheduleDraft(draft.id, slot.date);
+        addCalendarEvent({
+          postId: draft.id,
+          platform: slot.platform,
+          scheduledAt: slot.date,
+          title: newsItem?.title.substring(0, 30) + '...' || 'Post',
+          status: 'approved',
+        });
+      }
+    });
+    
+    toast({
+      title: 'Calendario programado',
+      description: `${scheduleSuggestions.length} posts programados con las variantes recomendadas.`,
+    });
+    navigate('/calendar');
+  };
+
   const handleSendToApproval = (platform: Platform, variant: number) => {
     const draft = drafts.find(d => d.platform === platform && d.variant === variant);
     if (draft) {
       updateDraftStatus(draft.id, 'pending');
       toast({ 
         title: 'Enviado a aprobación',
-        description: `Borrador de ${platform === 'twitter' ? 'X' : platform} enviado para revisión.`
+        description: `Borrador de ${platform === 'twitter' ? 'X' : platform} (V${variant}) enviado.`
       });
     } else {
       toast({ 
@@ -299,24 +358,91 @@ export function GeneratorPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {isGenerating ? 'Generando con IA...' : 'Generar Todos con IA'}
+              {isGenerating ? 'Generando...' : 'Generar Todo (9 posts)'}
             </Button>
             {drafts.length > 0 && (
-              <Button onClick={handleSendAllToApproval} className="gap-2">
+              <Button onClick={handleSendAllToApproval} variant="outline" className="gap-2">
                 <Send className="h-4 w-4" />
-                Enviar Todos a Aprobación
+                Enviar a Aprobación
               </Button>
             )}
           </div>
         }
       />
       
-      <div className="p-6">
+      <div className="p-6 space-y-6">
+        {/* Calendario de Publicación Sugerido */}
+        {(showSchedule || drafts.length > 0) && (
+          <Card className="border-accent/20 bg-accent/5">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Calendar className="h-5 w-5 text-accent" />
+                  Calendario de Publicación Sugerido
+                </CardTitle>
+                <Button 
+                  onClick={handleScheduleRecommended}
+                  className="gap-2"
+                  disabled={drafts.length === 0}
+                >
+                  <Clock className="h-4 w-4" />
+                  Programar Recomendados
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Red</TableHead>
+                    <TableHead>Variante</TableHead>
+                    <TableHead>Día</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Justificación</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scheduleSuggestions.map((slot, index) => {
+                    const recommendedVariant = getRecommendedVariant(slot.platform);
+                    const variantInfo = getVariantInfo(recommendedVariant, slot.platform);
+                    
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <PlatformBadge platform={slot.platform} size="sm" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="gap-1">
+                              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                              {variantInfo.name}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {format(slot.date, "EEEE d 'de' MMMM", { locale: es })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{slot.time}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[250px]">
+                          {slot.justification}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Tabs por Plataforma */}
         <Tabs value={selectedPlatform} onValueChange={(v) => setSelectedPlatform(v as Platform)}>
           <TabsList className="mb-6 bg-surface border border-border p-1">
             {platforms.map(platform => {
               const Icon = platformIcons[platform];
-              const hasDrafts = drafts.some(d => d.platform === platform);
+              const platformDrafts = drafts.filter(d => d.platform === platform);
               return (
                 <TabsTrigger
                   key={platform}
@@ -327,8 +453,10 @@ export function GeneratorPage() {
                   <span className="hidden sm:inline">
                     {platform === 'twitter' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)}
                   </span>
-                  {hasDrafts && (
-                    <span className="w-2 h-2 rounded-full bg-success" />
+                  {platformDrafts.length > 0 && (
+                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                      {platformDrafts.length}
+                    </Badge>
                   )}
                 </TabsTrigger>
               );
@@ -337,110 +465,150 @@ export function GeneratorPage() {
 
           {platforms.map(platform => (
             <TabsContent key={platform} value={platform} className="mt-0">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {[1, 2].map(variant => {
-                  const key = `${platform}-${variant}`;
+              <Accordion type="single" defaultValue="variant-1" className="space-y-4">
+                {variantDefinitions.map((variantDef) => {
+                  const key = `${platform}-${variantDef.variant}`;
                   const isGeneratingThis = generatingPlatforms.has(key);
-                  const content = getDraftContent(platform, variant);
+                  const content = getDraftContent(platform, variantDef.variant);
+                  const variantInfo = getVariantInfo(variantDef.variant, platform);
+                  const charEval = evaluateCharacterCount(content, platform);
                   
                   return (
-                    <Card 
-                      key={variant} 
-                      className={`shadow-card transition-all duration-200 ${
-                        selectedVariant === variant 
-                          ? 'ring-2 ring-accent shadow-soft' 
-                          : 'hover:shadow-soft'
-                      }`}
+                    <AccordionItem 
+                      key={variantDef.variant} 
+                      value={`variant-${variantDef.variant}`}
+                      className="border rounded-lg bg-card shadow-card"
                     >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <PlatformBadge platform={platform} size="sm" />
-                            <span className="text-muted-foreground">Variante {variant}</span>
-                          </CardTitle>
+                      <AccordionTrigger className="px-4 hover:no-underline">
+                        <div className="flex items-center gap-3 w-full">
                           <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCopy(content, key)}
-                              className="gap-1"
+                            {variantInfo.isRecommended && (
+                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                            )}
+                            <span className="font-semibold">{variantDef.name}</span>
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {variantDef.description}
+                          </span>
+                          {variantInfo.isRecommended && (
+                            <Badge className="ml-auto mr-4 bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                              Recomendada
+                            </Badge>
+                          )}
+                          {content && (
+                            <Badge 
+                              variant="outline" 
+                              className={`mr-4 ${
+                                charEval.status === 'ok' 
+                                  ? 'text-green-600 border-green-300' 
+                                  : charEval.status === 'short'
+                                    ? 'text-orange-600 border-orange-300'
+                                    : 'text-red-600 border-red-300'
+                              }`}
+                            >
+                              {charEval.message}
+                            </Badge>
+                          )}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-4">
+                          {/* Toolbar */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCopy(content, key)}
+                                className="gap-1"
+                                disabled={!content}
+                              >
+                                {copiedId === key ? (
+                                  <>
+                                    <Check className="h-4 w-4 text-success" />
+                                    Copiado
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-4 w-4" />
+                                    Copiar
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleGenerateSingle(platform, variantDef.variant)}
+                                disabled={isGeneratingThis || isGenerating}
+                                className="gap-1"
+                              >
+                                {isGeneratingThis ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                                Regenerar
+                              </Button>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              className="gap-2"
+                              onClick={() => handleSendToApproval(platform, variantDef.variant)}
                               disabled={!content}
                             >
-                              {copiedId === key ? (
-                                <>
-                                  <Check className="h-4 w-4 text-success" />
-                                  Copiado
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4" />
-                                  Copiar
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleGenerateSingle(platform, variant)}
-                              disabled={isGeneratingThis || isGenerating}
-                            >
-                              {isGeneratingThis ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
+                              <Send className="h-4 w-4" />
+                              Enviar a Aprobación
                             </Button>
                           </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {isGeneratingThis ? (
-                          <div className="min-h-[200px] flex items-center justify-center bg-muted/50 rounded-md">
-                            <div className="text-center">
-                              <Loader2 className="h-8 w-8 animate-spin mx-auto text-accent" />
-                              <p className="text-sm text-muted-foreground mt-2">Generando con IA...</p>
+                          
+                          {/* Content */}
+                          {isGeneratingThis ? (
+                            <div className="min-h-[200px] flex items-center justify-center bg-muted/50 rounded-md">
+                              <div className="text-center">
+                                <Loader2 className="h-8 w-8 animate-spin mx-auto text-accent" />
+                                <p className="text-sm text-muted-foreground mt-2">Generando {variantDef.name}...</p>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <Textarea
-                            value={content}
-                            onChange={(e) => handleContentChange(platform, variant, e.target.value)}
-                            className="min-h-[200px] resize-none font-mono text-sm"
-                            onClick={() => setSelectedVariant(variant)}
-                            placeholder={`Haz clic en "Generar con IA" para crear contenido para ${platform === 'twitter' ? 'X' : platform}`}
-                          />
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            {content.length} caracteres
-                          </span>
-                          <Button 
-                            size="sm" 
-                            className="gap-2"
-                            onClick={() => handleSendToApproval(platform, variant)}
-                            disabled={!content}
-                          >
-                            <Send className="h-4 w-4" />
-                            Enviar a Aprobación
-                          </Button>
+                          ) : (
+                            <Textarea
+                              value={content}
+                              onChange={(e) => handleContentChange(platform, variantDef.variant, e.target.value)}
+                              className="min-h-[200px] resize-none font-mono text-sm"
+                              placeholder={`Haz clic en "Generar Todo" o "Regenerar" para crear ${variantDef.name}`}
+                            />
+                          )}
+                          
+                          {/* Alternative closing question */}
+                          {variantInfo.alternativeClosingQuestion && content && (
+                            <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-md">
+                              <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground">Pregunta alternativa de cierre:</p>
+                                <p className="text-sm italic">"{variantInfo.alternativeClosingQuestion}"</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </CardContent>
-                    </Card>
+                      </AccordionContent>
+                    </AccordionItem>
                   );
                 })}
-              </div>
+              </Accordion>
             </TabsContent>
           ))}
         </Tabs>
 
-        <Card className="mt-6 bg-muted/50 border-dashed">
+        {/* Reglas Editoriales */}
+        <Card className="bg-muted/50 border-dashed">
           <CardContent className="p-4">
-            <h4 className="font-medium text-sm text-foreground mb-2">📝 Reglas Editoriales (aplicadas por la IA)</h4>
-            <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• No copiar texto literal de noticias. Resumir y aportar criterio propio.</li>
-              <li>• Tono: profesional, cercano y con criterio (human premium).</li>
-              <li>• Siempre enlazar a la fuente original.</li>
-              <li>• Generar empatía y confianza con la audiencia.</li>
+            <h4 className="font-medium text-sm text-foreground mb-2">📝 Reglas Editoriales Aplicadas</h4>
+            <ul className="text-xs text-muted-foreground space-y-1 grid grid-cols-1 md:grid-cols-2 gap-x-4">
+              <li>• <strong>Plantilla:</strong> Gancho → Contexto → 3 Claves → Cierre</li>
+              <li>• <strong>Tono:</strong> Opinión suave, criterio y matices</li>
+              <li>• <strong>LinkedIn:</strong> 900-1.400 caracteres, reflexivo</li>
+              <li>• <strong>X:</strong> 180-280 caracteres, 1 idea + dato</li>
+              <li>• <strong>Facebook:</strong> 300-700 caracteres, narrativo</li>
+              <li>• <strong>Hashtags:</strong> Máximo 2-4 relevantes</li>
             </ul>
           </CardContent>
         </Card>
