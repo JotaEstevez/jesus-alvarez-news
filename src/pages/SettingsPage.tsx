@@ -23,7 +23,6 @@ import { SourceDialog } from '@/components/settings/SourceDialog';
 import { KeywordDialog } from '@/components/settings/KeywordDialog';
 import { DeleteConfirmDialog } from '@/components/settings/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Plus, 
   Pencil, 
@@ -242,9 +241,9 @@ export function SettingsPage() {
     }
     if (dataLoaded && !loading) {
       return (
-        <div className="mb-4 p-2 bg-green-500/10 border border-green-500/30 rounded-lg text-green-600 text-xs flex items-center gap-2">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          Conectado a Supabase • {topics.length} topics, {entities.length} entidades, {sources.length} fuentes, {keywords.length} keywords
+        <div className="mb-4 p-2 bg-success/10 border border-success/30 rounded-lg text-success text-xs flex items-center gap-2">
+          <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
+          Conectado al backend • {topics.length} topics, {entities.length} entidades, {sources.length} fuentes, {keywords.length} keywords
         </div>
       );
     }

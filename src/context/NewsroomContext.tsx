@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { NewsItem, PostDraft, CalendarEvent, Topic, Entity, Source, Keyword, Platform, PostStatus } from '@/types/newsroom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { INITIAL_SEED } from '@/data/initialSeed';
 
 // Database row types
 interface DbTopic {
@@ -128,7 +129,7 @@ const toPostDraft = (row: DbPostDraft): PostDraft => ({
   updatedAt: new Date(row.updated_at),
 });
 
-interface NewsroomContextType {
+export interface NewsroomContextType {
   loading: boolean;
   error: string | null;
   dataLoaded: boolean;
@@ -190,6 +191,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const seedAttemptedRef = useRef(false);
 
   // State
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
@@ -214,26 +216,147 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
       };
     });
 
+  const logDb = useCallback((message: string, details?: unknown) => {
+    if (details !== undefined) {
+      // eslint-disable-next-line no-console
+      console.log(`[NewsroomContext] ${message}`, details);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`[NewsroomContext] ${message}`);
+    }
+  }, []);
+
+  const ensureSeedDataIfEmpty = useCallback(async () => {
+    if (!user) return;
+    if (seedAttemptedRef.current) return;
+    seedAttemptedRef.current = true;
+
+    try {
+      logDb('Seed check: contando registros...');
+      const [topicsCountRes, entitiesCountRes, sourcesCountRes, keywordsCountRes] = await Promise.all([
+        supabase.from('topics').select('id', { count: 'exact', head: true }),
+        supabase.from('entities').select('id', { count: 'exact', head: true }),
+        supabase.from('sources').select('id', { count: 'exact', head: true }),
+        supabase.from('keywords').select('id', { count: 'exact', head: true }),
+      ]);
+
+      const countErrors = [topicsCountRes.error, entitiesCountRes.error, sourcesCountRes.error, keywordsCountRes.error].filter(Boolean);
+      if (countErrors.length > 0) {
+        // eslint-disable-next-line no-console
+        console.error('[NewsroomContext] Seed check errors:', countErrors);
+        return;
+      }
+
+      const counts = {
+        topics: topicsCountRes.count ?? 0,
+        entities: entitiesCountRes.count ?? 0,
+        sources: sourcesCountRes.count ?? 0,
+        keywords: keywordsCountRes.count ?? 0,
+      };
+      logDb('Seed check: resultados', counts);
+
+      const seedOps: Promise<void>[] = [];
+
+      if (counts.topics === 0) {
+        const payload = INITIAL_SEED.topics.map(t => ({
+          user_id: user.id,
+          name: t.name,
+          description: null,
+          priority: t.priority,
+        }));
+        logDb('Seeding topics...', payload);
+        seedOps.push(
+          (async () => {
+            const { error } = await supabase.from('topics').insert(payload);
+            if (error) throw error;
+          })()
+        );
+      }
+
+      if (counts.entities === 0) {
+        const payload = INITIAL_SEED.entities.map(e => ({
+          user_id: user.id,
+          name: e.name,
+          type: e.type,
+          aliases: e.aliases ?? [],
+        }));
+        logDb('Seeding entities...', payload);
+        seedOps.push(
+          (async () => {
+            const { error } = await supabase.from('entities').insert(payload);
+            if (error) throw error;
+          })()
+        );
+      }
+
+      if (counts.sources === 0) {
+        const payload = INITIAL_SEED.sources.map(s => ({
+          user_id: user.id,
+          name: s.name,
+          url: s.url,
+          category: s.category,
+          reliability: s.reliability,
+        }));
+        logDb('Seeding sources...', payload);
+        seedOps.push(
+          (async () => {
+            const { error } = await supabase.from('sources').insert(payload);
+            if (error) throw error;
+          })()
+        );
+      }
+
+      if (counts.keywords === 0) {
+        const payload = INITIAL_SEED.keywords.map(k => ({
+          user_id: user.id,
+          term: k.term,
+          type: k.type,
+          weight: k.weight,
+        }));
+        logDb('Seeding keywords...', payload);
+        seedOps.push(
+          (async () => {
+            const { error } = await supabase.from('keywords').insert(payload);
+            if (error) throw error;
+          })()
+        );
+      }
+
+      if (seedOps.length === 0) {
+        logDb('Seed: no es necesario (ya hay datos).');
+        return;
+      }
+
+      await Promise.all(seedOps);
+      logDb('Seed: completado');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[NewsroomContext] Seed failed:', e);
+    }
+  }, [logDb, user]);
+
   // Load all data from Supabase
   const loadData = useCallback(async () => {
     // Wait for auth to finish loading
     if (authLoading) {
-      console.log('[NewsroomContext] Waiting for auth...');
+      logDb('Waiting for auth...');
       return;
     }
     
     if (!user) {
-      console.log('[NewsroomContext] No user, skipping data load');
+      logDb('No user, skipping data load');
       setLoading(false);
       setDataLoaded(false);
       return;
     }
     
-    console.log('[NewsroomContext] Loading data for user:', user.id);
+    logDb('Loading data for user:', user.id);
     setLoading(true);
     setError(null);
     
     try {
+      await ensureSeedDataIfEmpty();
+
       const [topicsRes, entitiesRes, sourcesRes, keywordsRes, newsRes, draftsRes] = await Promise.all([
         supabase.from('topics').select('*').order('priority'),
         supabase.from('entities').select('*').order('name'),
@@ -247,15 +370,15 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
       const errors = [topicsRes.error, entitiesRes.error, sourcesRes.error, keywordsRes.error, newsRes.error, draftsRes.error].filter(Boolean);
       if (errors.length > 0) {
         console.error('[NewsroomContext] Supabase errors:', errors);
-        setError('Error al cargar datos de Supabase');
+        setError('Error al cargar datos del backend');
         toast({
           title: 'Error de conexión',
-          description: 'No se pudieron cargar algunos datos. Verifica tu conexión.',
+          description: 'No se pudieron cargar algunos datos. Intenta de nuevo.',
           variant: 'destructive',
         });
       }
 
-      console.log('[NewsroomContext] Data loaded:', {
+      logDb('Data loaded:', {
         topics: topicsRes.data?.length || 0,
         entities: entitiesRes.data?.length || 0,
         sources: sourcesRes.data?.length || 0,
@@ -274,7 +397,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
       setDataLoaded(true);
     } catch (err) {
       console.error('[NewsroomContext] Error loading data:', err);
-      setError('Error de conexión con Supabase');
+      setError('Error de conexión con el backend');
       toast({
         title: 'Error',
         description: 'No se pudieron cargar los datos',
@@ -283,7 +406,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user, authLoading, toast]);
+  }, [user, authLoading, toast, ensureSeedDataIfEmpty, logDb]);
 
   // Load data when user changes or auth finishes loading
   useEffect(() => {
@@ -321,26 +444,38 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     if (topic.id) {
+      logDb('topics.update', { id: topic.id, ...topic });
       const { error } = await supabase
         .from('topics')
         .update({ name: topic.name, description: topic.description, priority: topic.priority })
         .eq('id', topic.id);
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] topics.update error:', error);
+        throw error;
+      }
       setTopics(prev => prev.map(t => t.id === topic.id ? { ...t, ...topic } as Topic : t));
     } else {
+      logDb('topics.insert', topic);
       const { data, error } = await supabase
         .from('topics')
         .insert({ user_id: user.id, name: topic.name, description: topic.description, priority: topic.priority })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] topics.insert error:', error);
+        throw error;
+      }
       if (data) setTopics(prev => [...prev, toTopic(data)]);
     }
   };
 
   const deleteTopic = async (id: string) => {
+    logDb('topics.delete', { id });
     const { error } = await supabase.from('topics').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[NewsroomContext] topics.delete error:', error);
+      throw error;
+    }
     setTopics(prev => prev.filter(t => t.id !== id));
   };
 
@@ -349,26 +484,38 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     if (entity.id) {
+      logDb('entities.update', { id: entity.id, ...entity });
       const { error } = await supabase
         .from('entities')
         .update({ name: entity.name, type: entity.type, aliases: entity.aliases })
         .eq('id', entity.id);
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] entities.update error:', error);
+        throw error;
+      }
       setEntities(prev => prev.map(e => e.id === entity.id ? { ...e, ...entity } as Entity : e));
     } else {
+      logDb('entities.insert', entity);
       const { data, error } = await supabase
         .from('entities')
         .insert({ user_id: user.id, name: entity.name, type: entity.type, aliases: entity.aliases })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] entities.insert error:', error);
+        throw error;
+      }
       if (data) setEntities(prev => [...prev, toEntity(data)]);
     }
   };
 
   const deleteEntity = async (id: string) => {
+    logDb('entities.delete', { id });
     const { error } = await supabase.from('entities').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[NewsroomContext] entities.delete error:', error);
+      throw error;
+    }
     setEntities(prev => prev.filter(e => e.id !== id));
   };
 
@@ -377,26 +524,38 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     if (source.id) {
+      logDb('sources.update', { id: source.id, ...source });
       const { error } = await supabase
         .from('sources')
         .update({ name: source.name, url: source.url, category: source.category, reliability: source.reliability })
         .eq('id', source.id);
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] sources.update error:', error);
+        throw error;
+      }
       setSources(prev => prev.map(s => s.id === source.id ? { ...s, ...source } as Source : s));
     } else {
+      logDb('sources.insert', source);
       const { data, error } = await supabase
         .from('sources')
         .insert({ user_id: user.id, name: source.name, url: source.url, category: source.category, reliability: source.reliability })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] sources.insert error:', error);
+        throw error;
+      }
       if (data) setSources(prev => [...prev, toSource(data)]);
     }
   };
 
   const deleteSource = async (id: string) => {
+    logDb('sources.delete', { id });
     const { error } = await supabase.from('sources').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[NewsroomContext] sources.delete error:', error);
+      throw error;
+    }
     setSources(prev => prev.filter(s => s.id !== id));
   };
 
@@ -405,26 +564,38 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     if (keyword.id) {
+      logDb('keywords.update', { id: keyword.id, ...keyword });
       const { error } = await supabase
         .from('keywords')
         .update({ term: keyword.term, type: keyword.type, weight: keyword.weight })
         .eq('id', keyword.id);
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] keywords.update error:', error);
+        throw error;
+      }
       setKeywords(prev => prev.map(k => k.id === keyword.id ? { ...k, ...keyword } as Keyword : k));
     } else {
+      logDb('keywords.insert', keyword);
       const { data, error } = await supabase
         .from('keywords')
         .insert({ user_id: user.id, term: keyword.term, type: keyword.type, weight: keyword.weight })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[NewsroomContext] keywords.insert error:', error);
+        throw error;
+      }
       if (data) setKeywords(prev => [...prev, toKeyword(data)]);
     }
   };
 
   const deleteKeyword = async (id: string) => {
+    logDb('keywords.delete', { id });
     const { error } = await supabase.from('keywords').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[NewsroomContext] keywords.delete error:', error);
+      throw error;
+    }
     setKeywords(prev => prev.filter(k => k.id !== id));
   };
 
