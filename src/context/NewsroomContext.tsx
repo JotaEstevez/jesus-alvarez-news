@@ -130,6 +130,8 @@ const toPostDraft = (row: DbPostDraft): PostDraft => ({
 
 interface NewsroomContextType {
   loading: boolean;
+  error: string | null;
+  dataLoaded: boolean;
   // News
   newsItems: NewsItem[];
   addNewsItem: (news: Omit<NewsItem, 'id' | 'capturedAt' | 'score'>) => Promise<void>;
@@ -183,9 +185,11 @@ interface NewsroomContextType {
 const NewsroomContext = createContext<NewsroomContextType | null>(null);
 
 export function NewsroomProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // State
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
@@ -212,12 +216,23 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
 
   // Load all data from Supabase
   const loadData = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
+    // Wait for auth to finish loading
+    if (authLoading) {
+      console.log('[NewsroomContext] Waiting for auth...');
       return;
     }
     
+    if (!user) {
+      console.log('[NewsroomContext] No user, skipping data load');
+      setLoading(false);
+      setDataLoaded(false);
+      return;
+    }
+    
+    console.log('[NewsroomContext] Loading data for user:', user.id);
     setLoading(true);
+    setError(null);
+    
     try {
       const [topicsRes, entitiesRes, sourcesRes, keywordsRes, newsRes, draftsRes] = await Promise.all([
         supabase.from('topics').select('*').order('priority'),
@@ -228,14 +243,38 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
         supabase.from('post_drafts').select('*').order('created_at', { ascending: false }),
       ]);
 
+      // Check for errors
+      const errors = [topicsRes.error, entitiesRes.error, sourcesRes.error, keywordsRes.error, newsRes.error, draftsRes.error].filter(Boolean);
+      if (errors.length > 0) {
+        console.error('[NewsroomContext] Supabase errors:', errors);
+        setError('Error al cargar datos de Supabase');
+        toast({
+          title: 'Error de conexión',
+          description: 'No se pudieron cargar algunos datos. Verifica tu conexión.',
+          variant: 'destructive',
+        });
+      }
+
+      console.log('[NewsroomContext] Data loaded:', {
+        topics: topicsRes.data?.length || 0,
+        entities: entitiesRes.data?.length || 0,
+        sources: sourcesRes.data?.length || 0,
+        keywords: keywordsRes.data?.length || 0,
+        news: newsRes.data?.length || 0,
+        drafts: draftsRes.data?.length || 0,
+      });
+
       if (topicsRes.data) setTopics(topicsRes.data.map(toTopic));
       if (entitiesRes.data) setEntities(entitiesRes.data.map(toEntity));
       if (sourcesRes.data) setSources(sourcesRes.data.map(toSource));
       if (keywordsRes.data) setKeywords(keywordsRes.data.map(toKeyword));
       if (newsRes.data) setNewsItems(newsRes.data.map(toNewsItem));
       if (draftsRes.data) setDrafts(draftsRes.data.map(toPostDraft));
-    } catch (error) {
-      console.error('Error loading data:', error);
+      
+      setDataLoaded(true);
+    } catch (err) {
+      console.error('[NewsroomContext] Error loading data:', err);
+      setError('Error de conexión con Supabase');
       toast({
         title: 'Error',
         description: 'No se pudieron cargar los datos',
@@ -244,8 +283,9 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, authLoading, toast]);
 
+  // Load data when user changes or auth finishes loading
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -581,6 +621,8 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
   return (
     <NewsroomContext.Provider value={{
       loading,
+      error,
+      dataLoaded,
       newsItems,
       addNewsItem,
       updateNewsItem,
