@@ -205,6 +205,42 @@ export type Database = {
         }
         Relationships: []
       }
+      rss_sources: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          last_fetched_at: string | null
+          name: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_fetched_at?: string | null
+          name: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_fetched_at?: string | null
+          name?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           category: string
