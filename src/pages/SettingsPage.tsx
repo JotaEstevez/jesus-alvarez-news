@@ -16,11 +16,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useNewsroom } from '@/context/NewsroomContext';
-import { Topic, Entity, Source, Keyword } from '@/types/newsroom';
+import { Topic, Entity, Source, Keyword, RssSource } from '@/types/newsroom';
 import { TopicDialog } from '@/components/settings/TopicDialog';
 import { EntityDialog } from '@/components/settings/EntityDialog';
 import { SourceDialog } from '@/components/settings/SourceDialog';
 import { KeywordDialog } from '@/components/settings/KeywordDialog';
+import { RssSourceDialog } from '@/components/settings/RssSourceDialog';
 import { DeleteConfirmDialog } from '@/components/settings/DeleteConfirmDialog';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -32,8 +33,11 @@ import {
   Globe,
   Key,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Rss
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export function SettingsPage() {
   const { toast } = useToast();
@@ -45,6 +49,7 @@ export function SettingsPage() {
     entities, 
     sources, 
     keywords,
+    rssSources,
     saveTopic,
     deleteTopic,
     saveEntity,
@@ -53,6 +58,8 @@ export function SettingsPage() {
     deleteSource,
     saveKeyword,
     deleteKeyword,
+    saveRssSource,
+    deleteRssSource,
     reload
   } = useNewsroom();
   
@@ -64,12 +71,14 @@ export function SettingsPage() {
   const [entityDialogOpen, setEntityDialogOpen] = useState(false);
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [keywordDialogOpen, setKeywordDialogOpen] = useState(false);
+  const [rssSourceDialogOpen, setRssSourceDialogOpen] = useState(false);
   
   // Edit states
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [editingKeyword, setEditingKeyword] = useState<Keyword | null>(null);
+  const [editingRssSource, setEditingRssSource] = useState<RssSource | null>(null);
   
   // Delete confirmation state
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -215,6 +224,52 @@ export function SettingsPage() {
     });
   };
 
+  // RSS Source handlers
+  const handleSaveRssSource = async (rssData: Omit<RssSource, 'id'> & { id?: string }) => {
+    setSaving(true);
+    try {
+      await saveRssSource(rssData);
+      toast({ 
+        title: rssData.id ? 'Fuente RSS actualizada' : 'Fuente RSS añadida', 
+        description: `"${rssData.name}" se ha ${rssData.id ? 'actualizado' : 'añadido'} correctamente.` 
+      });
+      setEditingRssSource(null);
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo guardar la fuente RSS', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRssSource = (rssSource: RssSource) => {
+    setDeleteDialog({
+      open: true,
+      itemName: rssSource.name,
+      itemType: 'fuente RSS',
+      onConfirm: async () => {
+        try {
+          await deleteRssSource(rssSource.id);
+          toast({ title: 'Fuente RSS eliminada', description: `"${rssSource.name}" se ha eliminado.` });
+        } catch (error) {
+          toast({ title: 'Error', description: 'No se pudo eliminar', variant: 'destructive' });
+        }
+        setDeleteDialog(prev => ({ ...prev, open: false }));
+      }
+    });
+  };
+
+  const handleToggleRssActive = async (rssSource: RssSource) => {
+    try {
+      await saveRssSource({ ...rssSource, isActive: !rssSource.isActive });
+      toast({ 
+        title: rssSource.isActive ? 'Fuente desactivada' : 'Fuente activada',
+        description: `"${rssSource.name}" está ahora ${rssSource.isActive ? 'inactiva' : 'activa'}.`
+      });
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
+    }
+  };
+
   const TableSkeleton = () => (
     <div className="space-y-3">
       {[1,2,3].map(i => (
@@ -243,7 +298,7 @@ export function SettingsPage() {
       return (
         <div className="mb-4 p-2 bg-success/10 border border-success/30 rounded-lg text-success text-xs flex items-center gap-2">
           <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-          Conectado al backend • {topics.length} topics, {entities.length} entidades, {sources.length} fuentes, {keywords.length} keywords
+          Conectado al backend • {topics.length} topics, {entities.length} entidades, {sources.length} fuentes, {keywords.length} keywords, {rssSources.length} RSS
         </div>
       );
     }
@@ -282,6 +337,10 @@ export function SettingsPage() {
             <TabsTrigger value="keywords" className="gap-2 data-[state=active]:bg-background">
               <Key className="h-4 w-4" />
               Keywords
+            </TabsTrigger>
+            <TabsTrigger value="rss" className="gap-2 data-[state=active]:bg-background">
+              <Rss className="h-4 w-4" />
+              Fuentes RSS
             </TabsTrigger>
             <TabsTrigger value="scoring" className="gap-2 data-[state=active]:bg-background">
               <Sliders className="h-4 w-4" />
@@ -609,6 +668,101 @@ export function SettingsPage() {
             </Card>
           </TabsContent>
 
+          {/* RSS Sources Tab */}
+          <TabsContent value="rss">
+            <Card className="shadow-soft">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Fuentes RSS</CardTitle>
+                  <CardDescription>Feeds RSS para importar noticias automáticamente</CardDescription>
+                </div>
+                <Button 
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingRssSource(null);
+                    setRssSourceDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Añadir Fuente RSS
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loading ? <TableSkeleton /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>URL</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead>Activa</TableHead>
+                        <TableHead>Última actualización</TableHead>
+                        <TableHead className="w-[100px]">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rssSources.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                            No hay fuentes RSS configuradas. Añade la primera.
+                          </TableCell>
+                        </TableRow>
+                      ) : rssSources.map(rss => (
+                        <TableRow key={rss.id}>
+                          <TableCell className="font-medium">{rss.name}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
+                            {rss.url}
+                          </TableCell>
+                          <TableCell>
+                            {rss.category ? (
+                              <Badge variant="secondary">{rss.category}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Switch 
+                              checked={rss.isActive} 
+                              onCheckedChange={() => handleToggleRssActive(rss)}
+                            />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {rss.lastFetchedAt 
+                              ? format(rss.lastFetchedAt, "d MMM, HH:mm", { locale: es })
+                              : 'Nunca'
+                            }
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => {
+                                  setEditingRssSource(rss);
+                                  setRssSourceDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-destructive"
+                                onClick={() => handleDeleteRssSource(rss)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Scoring Tab */}
           <TabsContent value="scoring">
             <div className="grid gap-6">
@@ -699,6 +853,13 @@ export function SettingsPage() {
         onOpenChange={setKeywordDialogOpen}
         keyword={editingKeyword}
         onSave={handleSaveKeyword}
+      />
+      
+      <RssSourceDialog
+        open={rssSourceDialogOpen}
+        onOpenChange={setRssSourceDialogOpen}
+        rssSource={editingRssSource}
+        onSave={handleSaveRssSource}
       />
       
       <DeleteConfirmDialog

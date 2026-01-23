@@ -27,14 +27,16 @@ import {
   Sparkles,
   Plus,
   Trash2,
-  CheckCircle2
+  CheckCircle2,
+  Rss,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export function InboxPage() {
   const { toast } = useToast();
-  const { newsItems, topics, sources, deleteNewsItem, markNewsAsReady } = useNewsroom();
+  const { newsItems, topics, sources, deleteNewsItem, markNewsAsReady, fetchRssSources, rssSources } = useNewsroom();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [scoreFilter, setScoreFilter] = useState<string>('all');
@@ -44,6 +46,7 @@ export function InboxPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string; title: string }>({
     open: false, id: '', title: ''
   });
+  const [isFetchingRss, setIsFetchingRss] = useState(false);
 
   const filteredNews = newsItems.filter(item => {
     if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -83,6 +86,50 @@ export function InboxPage() {
     }
   };
 
+  const handleFetchRss = async () => {
+    if (rssSources.filter(s => s.isActive).length === 0) {
+      toast({ 
+        title: 'Sin fuentes activas', 
+        description: 'Añade fuentes RSS en Configuración primero.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsFetchingRss(true);
+    toast({ title: 'Obteniendo noticias...', description: 'Esto puede tardar unos segundos.' });
+    
+    try {
+      const result = await fetchRssSources();
+      
+      if (result.error) {
+        toast({ 
+          title: 'Error parcial', 
+          description: result.error,
+          variant: 'destructive'
+        });
+      } else if (result.imported === 0) {
+        toast({ 
+          title: 'Sin noticias nuevas', 
+          description: 'No se encontraron noticias nuevas en las fuentes RSS.' 
+        });
+      } else {
+        toast({ 
+          title: '¡Noticias importadas!', 
+          description: `Se importaron ${result.imported} noticias nuevas.` 
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: 'Error', 
+        description: 'No se pudieron obtener las noticias RSS.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsFetchingRss(false);
+    }
+  };
+
   return (
     <MainLayout>
       <PageHeader 
@@ -90,6 +137,19 @@ export function InboxPage() {
         subtitle={`${filteredNews.length} noticias capturadas`}
         actions={
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="gap-2"
+              onClick={handleFetchRss}
+              disabled={isFetchingRss}
+            >
+              {isFetchingRss ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Rss className="h-4 w-4" />
+              )}
+              {isFetchingRss ? 'Obteniendo...' : 'Traer noticias ahora'}
+            </Button>
             <Button 
               variant="outline" 
               className="gap-2"
@@ -274,14 +334,23 @@ export function InboxPage() {
           {filteredNews.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <p>No hay noticias que coincidan con los filtros</p>
-              <Button 
-                variant="outline" 
-                className="mt-4"
-                onClick={() => setAddDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Añadir primera noticia
-              </Button>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={handleFetchRss}
+                  disabled={isFetchingRss}
+                >
+                  <Rss className="h-4 w-4 mr-2" />
+                  Traer noticias RSS
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setAddDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Añadir manualmente
+                </Button>
+              </div>
             </div>
           )}
         </div>

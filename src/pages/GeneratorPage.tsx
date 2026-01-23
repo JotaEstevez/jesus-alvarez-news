@@ -67,7 +67,7 @@ export function GeneratorPage() {
   } = useNewsroom();
   
   const newsItem = newsId ? getNewsById(newsId) : null;
-  const readyNews = getReadyNews();
+  const readyNews = getReadyNews(); // Only shows news with status='ready'
   
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
   const [selectedVariant, setSelectedVariant] = useState(1);

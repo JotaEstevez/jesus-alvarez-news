@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { NewsItem, PostDraft, CalendarEvent, Topic, Entity, Source, Keyword, Platform, PostStatus } from '@/types/newsroom';
+import { NewsItem, PostDraft, CalendarEvent, Topic, Entity, Source, Keyword, Platform, PostStatus, RssSource } from '@/types/newsroom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -70,6 +70,16 @@ interface DbPostDraft {
   updated_at: string;
 }
 
+interface DbRssSource {
+  id: string;
+  user_id: string;
+  name: string;
+  url: string;
+  category: string | null;
+  is_active: boolean;
+  last_fetched_at: string | null;
+}
+
 // Converters
 const toTopic = (row: DbTopic): Topic => ({
   id: row.id,
@@ -129,6 +139,15 @@ const toPostDraft = (row: DbPostDraft): PostDraft => ({
   updatedAt: new Date(row.updated_at),
 });
 
+const toRssSource = (row: DbRssSource): RssSource => ({
+  id: row.id,
+  name: row.name,
+  url: row.url,
+  category: row.category || undefined,
+  isActive: row.is_active,
+  lastFetchedAt: row.last_fetched_at ? new Date(row.last_fetched_at) : undefined,
+});
+
 export interface NewsroomContextType {
   loading: boolean;
   error: string | null;
@@ -171,6 +190,12 @@ export interface NewsroomContextType {
   saveKeyword: (keyword: Omit<Keyword, 'id'> & { id?: string }) => Promise<void>;
   deleteKeyword: (id: string) => Promise<void>;
   
+  // RSS Sources
+  rssSources: RssSource[];
+  saveRssSource: (source: Omit<RssSource, 'id'> & { id?: string }) => Promise<void>;
+  deleteRssSource: (id: string) => Promise<void>;
+  fetchRssSources: () => Promise<{ imported: number; error?: string }>;
+  
   // Legacy setters for compatibility
   setTopics: React.Dispatch<React.SetStateAction<Topic[]>>;
   setEntities: React.Dispatch<React.SetStateAction<Entity[]>>;
@@ -200,6 +225,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [rssSources, setRssSources] = useState<RssSource[]>([]);
 
   // Derive calendar events from scheduled drafts
   const calendarEvents: CalendarEvent[] = drafts
@@ -357,17 +383,18 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     try {
       await ensureSeedDataIfEmpty();
 
-      const [topicsRes, entitiesRes, sourcesRes, keywordsRes, newsRes, draftsRes] = await Promise.all([
+      const [topicsRes, entitiesRes, sourcesRes, keywordsRes, newsRes, draftsRes, rssSourcesRes] = await Promise.all([
         supabase.from('topics').select('*').order('priority'),
         supabase.from('entities').select('*').order('name'),
         supabase.from('sources').select('*').order('name'),
         supabase.from('keywords').select('*').order('term'),
         supabase.from('news_items').select('*').order('captured_at', { ascending: false }),
         supabase.from('post_drafts').select('*').order('created_at', { ascending: false }),
+        supabase.from('rss_sources').select('*').order('name'),
       ]);
 
       // Check for errors
-      const errors = [topicsRes.error, entitiesRes.error, sourcesRes.error, keywordsRes.error, newsRes.error, draftsRes.error].filter(Boolean);
+      const errors = [topicsRes.error, entitiesRes.error, sourcesRes.error, keywordsRes.error, newsRes.error, draftsRes.error, rssSourcesRes.error].filter(Boolean);
       if (errors.length > 0) {
         console.error('[NewsroomContext] Supabase errors:', errors);
         setError('Error al cargar datos del backend');
@@ -385,6 +412,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
         keywords: keywordsRes.data?.length || 0,
         news: newsRes.data?.length || 0,
         drafts: draftsRes.data?.length || 0,
+        rssSources: rssSourcesRes.data?.length || 0,
       });
 
       if (topicsRes.data) setTopics(topicsRes.data.map(toTopic));
@@ -393,6 +421,7 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
       if (keywordsRes.data) setKeywords(keywordsRes.data.map(toKeyword));
       if (newsRes.data) setNewsItems(newsRes.data.map(toNewsItem));
       if (draftsRes.data) setDrafts(draftsRes.data.map(toPostDraft));
+      if (rssSourcesRes.data) setRssSources(rssSourcesRes.data.map(toRssSource));
       
       setDataLoaded(true);
     } catch (err) {
@@ -789,6 +818,79 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
     await updateDraft(id, { scheduledAt: undefined, status: 'pending' });
   };
 
+  // =================== RSS SOURCES ===================
+  const saveRssSource = async (source: Omit<RssSource, 'id'> & { id?: string }) => {
+    if (!user) return;
+    
+    if (source.id) {
+      logDb('rss_sources.update', { id: source.id, ...source });
+      const { error } = await supabase
+        .from('rss_sources')
+        .update({ 
+          name: source.name, 
+          url: source.url, 
+          category: source.category || null, 
+          is_active: source.isActive 
+        })
+        .eq('id', source.id);
+      if (error) {
+        console.error('[NewsroomContext] rss_sources.update error:', error);
+        throw error;
+      }
+      setRssSources(prev => prev.map(s => s.id === source.id ? { ...s, ...source } as RssSource : s));
+    } else {
+      logDb('rss_sources.insert', source);
+      const { data, error } = await supabase
+        .from('rss_sources')
+        .insert({ 
+          user_id: user.id, 
+          name: source.name, 
+          url: source.url, 
+          category: source.category || null, 
+          is_active: source.isActive 
+        })
+        .select()
+        .single();
+      if (error) {
+        console.error('[NewsroomContext] rss_sources.insert error:', error);
+        throw error;
+      }
+      if (data) setRssSources(prev => [...prev, toRssSource(data)]);
+    }
+  };
+
+  const deleteRssSource = async (id: string) => {
+    logDb('rss_sources.delete', { id });
+    const { error } = await supabase.from('rss_sources').delete().eq('id', id);
+    if (error) {
+      console.error('[NewsroomContext] rss_sources.delete error:', error);
+      throw error;
+    }
+    setRssSources(prev => prev.filter(s => s.id !== id));
+  };
+
+  const fetchRssSources = async (): Promise<{ imported: number; error?: string }> => {
+    logDb('Fetching RSS sources...');
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-rss-sources');
+      
+      if (error) {
+        console.error('[NewsroomContext] fetchRssSources error:', error);
+        return { imported: 0, error: error.message };
+      }
+      
+      logDb('RSS fetch result:', data);
+      
+      // Reload news items after fetching
+      await loadData();
+      
+      return { imported: data?.imported || 0, error: data?.error };
+    } catch (err) {
+      console.error('[NewsroomContext] fetchRssSources exception:', err);
+      return { imported: 0, error: 'Error al obtener noticias RSS' };
+    }
+  };
+
   return (
     <NewsroomContext.Provider value={{
       loading,
@@ -824,6 +926,10 @@ export function NewsroomProvider({ children }: { children: ReactNode }) {
       deleteSource,
       saveKeyword,
       deleteKeyword,
+      rssSources,
+      saveRssSource,
+      deleteRssSource,
+      fetchRssSources,
       setTopics,
       setEntities,
       setSources,

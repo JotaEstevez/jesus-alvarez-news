@@ -85,6 +85,15 @@ export interface PublicationMetric {
   impressions?: number;
   engagements?: number;
   clicks?: number;
-  shares?: number;
   comments?: number;
+  shares?: number;
+}
+
+export interface RssSource {
+  id: string;
+  name: string;
+  url: string;
+  category?: string;
+  isActive: boolean;
+  lastFetchedAt?: Date;
 }
