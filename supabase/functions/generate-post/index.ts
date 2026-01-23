@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -135,6 +136,41 @@ serve(async (req) => {
   }
 
   try {
+    // ============================================
+    // AUTENTICACIÓN: Validar JWT del usuario
+    // ============================================
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.error('Authentication failed: No authorization header');
+      return new Response(
+        JSON.stringify({ error: 'No autorizado. Por favor, inicia sesión.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('Authentication failed: Invalid token', claimsError);
+      return new Response(
+        JSON.stringify({ error: 'Sesión inválida. Por favor, inicia sesión de nuevo.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+    console.log(`Authenticated user: ${userId}`);
+
+    // ============================================
+    // LÓGICA DE NEGOCIO
+    // ============================================
     const { newsTitle, newsSummary, newsUrl, newsSource, topics, platform, variant } = await req.json() as GeneratePostsRequest;
     
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -240,7 +276,7 @@ Genera ahora el post para ${platform.toUpperCase()} siguiendo todas las directri
   } catch (error) {
     console.error('Generate posts error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Error generando post' }),
+      JSON.stringify({ error: 'Error generando post. Por favor, intenta de nuevo.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
