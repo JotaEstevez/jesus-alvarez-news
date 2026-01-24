@@ -46,6 +46,8 @@ export function InboxPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string; title: string }>({
     open: false, id: '', title: ''
   });
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [isFetchingRss, setIsFetchingRss] = useState(false);
 
   const filteredNews = newsItems.filter(item => {
@@ -83,6 +85,26 @@ export function InboxPage() {
       });
     } catch (error) {
       toast({ title: 'Error', description: 'No se pudo actualizar', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (newsItems.length === 0) {
+      toast({ title: 'Inbox vacío', description: 'No hay noticias que eliminar.' });
+      return;
+    }
+    
+    setIsDeletingAll(true);
+    try {
+      for (const item of newsItems) {
+        await deleteNewsItem(item.id);
+      }
+      toast({ title: 'Inbox vaciado', description: `Se eliminaron ${newsItems.length} noticias.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'No se pudieron eliminar todas las noticias.', variant: 'destructive' });
+    } finally {
+      setIsDeletingAll(false);
+      setDeleteAllDialogOpen(false);
     }
   };
 
@@ -137,6 +159,15 @@ export function InboxPage() {
         subtitle={`${filteredNews.length} noticias capturadas`}
         actions={
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="gap-2 text-destructive hover:text-destructive"
+              onClick={() => setDeleteAllDialogOpen(true)}
+              disabled={newsItems.length === 0 || isDeletingAll}
+            >
+              <Trash2 className="h-4 w-4" />
+              Vaciar Inbox
+            </Button>
             <Button 
               variant="outline" 
               className="gap-2"
@@ -357,6 +388,14 @@ export function InboxPage() {
       </div>
 
       <AddNewsDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+      
+      <DeleteConfirmDialog
+        open={deleteAllDialogOpen}
+        onOpenChange={setDeleteAllDialogOpen}
+        itemName={`todas las ${newsItems.length} noticias del inbox`}
+        itemType="contenido"
+        onConfirm={handleDeleteAll}
+      />
       
       <DeleteConfirmDialog
         open={deleteDialog.open}
